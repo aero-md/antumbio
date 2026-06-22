@@ -1,0 +1,3 @@
+# Les médias (avatar, musique, fond vidéo/image) d'une vraie page vont ici.
+# Ce dossier est conservé dans git uniquement pour montrer la structure ;
+# pour les vrais utilisateurs, le contenu de users/ est ignoré (cf. .gitignore).

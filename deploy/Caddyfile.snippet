@@ -1,0 +1,16 @@
+your-domain.example {
+	encode zstd gzip
+
+	# Headers de sécurité non gérés par la CSP de SvelteKit
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# masque la version Caddy
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:3012
+}

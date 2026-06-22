@@ -1,0 +1,17 @@
+node_modules
+.svelte-kit
+build
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+
+# Script de déploiement personnel (hôte SSH, IP… réels). Template public : deploy.example.ps1
+deploy.ps1
+
+# ===== Pages utilisateurs =====
+# On ne versionne PAS le contenu réel des pages (vie privée + médias lourds).
+# Seul le template `users/_example/` est committé, pour montrer la structure.
+users/*
+!users/_example/

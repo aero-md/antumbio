@@ -1,0 +1,43 @@
+[Unit]
+Description=redsunsbio (SvelteKit / adapter-node)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/srv/redsunsbio
+EnvironmentFile=/srv/redsunsbio/.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3012
+ExecStart=/home/youruser/.bun/bin/bun build/index.js
+Restart=on-failure
+RestartSec=5
+
+# Hardening — limite le blast radius en cas de compromission applicative
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Bun écrit éventuellement un cache JIT / temp dans le cwd
+ReadWritePaths=/srv/redsunsbio
+
+[Install]
+WantedBy=multi-user.target
