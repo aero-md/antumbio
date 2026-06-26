@@ -23,15 +23,86 @@
 	interface Props { data: PageData; }
 	let { data }: Props = $props();
 
-	const { pseudo, config, html } = $derived(
+	const { pseudo, config, html, discordAvatarUrl } = $derived(
 		data as {
 			pseudo: string;
 			config: NonNullable<PageData['config']>;
 			html: string;
 			alreadyCommented: boolean;
+			discordAvatarUrl: string | null;
 		}
 	);
 	const assetBase = $derived(`/u/${pseudo}`);
+
+	// Couleur dominante de la PP : downscale à 48×48, on binne les pixels par octets
+	// (5 bits par canal = 32k buckets), on jette ceux à faible saturation / quasi-noir /
+	// quasi-blanc (sinon le gris parasite gagne) et on retient le bucket le plus
+	// populaire. C'est ce qui donne une vraie dominante perceptuelle vs la moyenne RGB
+	// (qui mixe bleu + skintone → mauve/bordeau sur la plupart des PP).
+	let pseudoColor = $state<string | null>(null);
+
+	$effect(() => {
+		const src = discordAvatarUrl ?? (config.avatar ? resolveAsset(assetBase, config.avatar) : null);
+		if (!src) return;
+
+		let cancelled = false;
+		const img = new Image();
+		img.crossOrigin = 'anonymous'; // requis pour pouvoir lire le canvas
+		img.onload = () => {
+			if (cancelled) return;
+			const W = 48;
+			const canvas = document.createElement('canvas');
+			canvas.width = W;
+			canvas.height = W;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return;
+			let data: Uint8ClampedArray;
+			try {
+				ctx.drawImage(img, 0, 0, W, W);
+				data = ctx.getImageData(0, 0, W, W).data;
+			} catch {
+				return; // canvas tainted → fallback blanc reste
+			}
+
+			const buckets = new Map<number, { r: number; g: number; b: number; count: number }>();
+			for (let i = 0; i < data.length; i += 4) {
+				const r = data[i];
+				const g = data[i + 1];
+				const b = data[i + 2];
+				const a = data[i + 3];
+				if (a < 200) continue;
+				const max = Math.max(r, g, b);
+				const min = Math.min(r, g, b);
+				if (max - min < 25) continue; // quasi-gris : parasites
+				if (max < 40) continue;       // trop sombre
+				if (min > 230) continue;      // trop clair
+				const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+				const e = buckets.get(key);
+				if (e) {
+					e.r += r;
+					e.g += g;
+					e.b += b;
+					e.count++;
+				} else {
+					buckets.set(key, { r, g, b, count: 1 });
+				}
+			}
+
+			let best: { r: number; g: number; b: number; count: number } | null = null;
+			for (const e of buckets.values()) {
+				if (!best || e.count > best.count) best = e;
+			}
+			if (!best) return;
+			const r = Math.round(best.r / best.count);
+			const g = Math.round(best.g / best.count);
+			const b = Math.round(best.b / best.count);
+			pseudoColor = `rgb(${r}, ${g}, ${b})`;
+		};
+		img.src = src;
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	// Init synchrone à partir de data : si pas de landing, on est entré d'emblée
 	// (évite le flash où la carte démarre opacity:0 avant que l'effet bascule).
@@ -204,14 +275,23 @@
 		/>
 	{:else}
 		<header class="pseudo-header">
-			{#if config.avatar}
+			{#if discordAvatarUrl || config.avatar}
 				<img
 					class="avatar"
-					src={resolveAsset(assetBase, config.avatar)}
+					src={discordAvatarUrl ?? resolveAsset(assetBase, config.avatar!)}
 					alt={config.displayName ?? pseudo}
 				/>
 			{/if}
-			<h1 class="pseudo">{config.displayName ?? pseudo}</h1>
+			<h1
+				class="pseudo"
+				data-effect={config.nicknameEffect ?? 'glow'}
+				style:--pseudo-accent={pseudoColor}
+			>
+				{#if (config.nicknameEffect ?? 'glow') === 'cast-shadow'}
+					<span class="pseudo-shadow" aria-hidden="true">{config.displayName ?? pseudo}</span>
+				{/if}
+				<span class="pseudo-text">{config.displayName ?? pseudo}</span>
+			</h1>
 		</header>
 
 		{@html html}
@@ -276,14 +356,14 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1.7rem;
-		width: min(850px, 100%);
+		width: min(45rem, 100%);
 		padding: 2.5rem 3rem;
 		text-align: center;
 		background: rgba(0, 0, 0, 0.5);
 		backdrop-filter: blur(56px);
 		-webkit-backdrop-filter: blur(56px);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 1rem;
+		border-radius: 1.75rem;
 		box-shadow:
 			0 40px 100px rgba(0, 0, 0, 0.85),
 			0 15px 40px rgba(0, 0, 0, 0.6),
@@ -296,38 +376,108 @@
 		opacity: 1;
 		pointer-events: auto;
 	}
+	/* Capsule liquidglass : pillule au sommet de la card. margin-bottom s'ajoute
+	   au gap flex de la card (1.7rem) → l'espace en-dessous est plus aéré que
+	   l'espace entre les autres blocs internes. */
 	.pseudo-header {
-		display: flex;
+		position: relative;
+		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		gap: 1.25rem;
-		width: 100%;
+		gap: 2rem;
+		padding: 0.7rem;
+		margin-bottom: 1rem;
+		border-radius: 999px;
+		box-shadow:
+			0 14px 30px rgba(0, 0, 0, 0.6),
+			0 3px 10px rgba(0, 0, 0, 0.45),
+			0 0 0 1px rgba(255, 255, 255, 0.18),
+			inset 0 1px 1px rgba(255, 255, 255, 0.45),
+			inset 0 -2px 4px rgba(0, 0, 0, 0.3);
 	}
 	.pseudo-header .avatar {
-		width: 4.5rem;
-		height: 4.5rem;
+		position: relative;
+		z-index: 1;
+		width: 5rem;
+		height: 5rem;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid rgba(255, 255, 255, 0.18);
-		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+		display: block;
+		border: none;
+		/* Bombé subtil + liseré sombre pour décoller du verre. */
+		box-shadow:
+			inset 0 2px 1px rgba(255, 255, 255, 0.35),
+			inset 0 -3px 6px rgba(0, 0, 0, 0.35),
+			0 0 0 1px rgba(0, 0, 0, 0.3);
 		flex-shrink: 0;
 	}
+	/* Reflet spéculaire qui balaie le haut de la capsule, ellipse large pour
+	   couvrir toute la longueur de la pillule. */
+	.pseudo-header::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: radial-gradient(
+			ellipse 60% 50% at 25% 10%,
+			rgba(255, 255, 255, 0.5) 0%,
+			rgba(255, 255, 255, 0.12) 50%,
+			rgba(255, 255, 255, 0) 80%
+		);
+		pointer-events: none;
+		z-index: 2;
+	}
+	/* Rebond léger en bas, plus étalé pour suivre la pillule. */
+	.pseudo-header::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: radial-gradient(
+			ellipse 80% 25% at 50% 95%,
+			rgba(255, 255, 255, 0.18) 0%,
+			rgba(255, 255, 255, 0) 75%
+		);
+		pointer-events: none;
+		z-index: 2;
+	}
+	/* Pseudo : base commune. Les effets visuels (glow / cast-shadow) sont scopés
+	   par [data-effect]. line-height 0.85 resserre le line-box sur les x-height
+	   letters → l'écriture all-lowercase apparaît centrée verticalement. */
 	.pseudo {
+		position: relative;
+		z-index: 3;
 		margin: 0;
+		padding-right: 2.1rem;
 		font-family: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
 		font-weight: 400;
-		font-size: 3rem;
-		line-height: 1.05;
+		font-size: 3.5rem;
+		line-height: 0.70;
 		letter-spacing: 0.01em;
 		text-transform: lowercase;
+		color: white;
+		/* Décale visuellement vers le haut pour compenser le typographic offset
+		   des x-height letters (Cormorant baseline + leading résiduel). */
+		transform: translateY(-0.08em);
+	}
+	.pseudo-text {
+		display: inline-block;
+		position: relative;
+		z-index: 1;
+	}
+	/* Glow (default) : gradient blanc → couleur PP + pulse text-shadow. text-shadow
+	   se rend à partir de la forme du glyphe, donc fonctionne malgré color: transparent. */
+	.pseudo[data-effect='glow'] {
+		background: linear-gradient(180deg, #ffffff 0%, var(--pseudo-accent, #ffffff) 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
 		text-shadow:
 			0 0 14px rgba(255, 255, 255, 0.55),
 			0 2px 4px rgba(0, 0, 0, 0.7);
 		animation: pseudo-pulse 3.2s ease-in-out infinite;
 	}
 	@keyframes pseudo-pulse {
-		0%,
-		100% {
+		0%, 100% {
 			text-shadow:
 				0 0 14px rgba(255, 255, 255, 0.55),
 				0 2px 4px rgba(0, 0, 0, 0.7);
@@ -338,6 +488,22 @@
 				0 0 48px rgba(255, 255, 255, 0.3),
 				0 2px 4px rgba(0, 0, 0, 0.7);
 		}
+	}
+	/* Cast-shadow : .pseudo-shadow est un double flou et gris foncé du texte, posé
+	   à la même position que le texte blanc → on ne voit que le halo blurry qui
+	   déborde, comme une vraie ombre projetée. Le texte blanc anime sa glow par-dessus. */
+	.pseudo[data-effect='cast-shadow'] .pseudo-shadow {
+		position: absolute;
+		left: 0;
+		top: 0;
+		color: rgba(20, 20, 20, 0.65);
+		filter: blur(3px);
+		pointer-events: none;
+		user-select: none;
+	}
+	.pseudo[data-effect='cast-shadow'] .pseudo-text {
+		/* Pulse glow blanc (animation pseudo-pulse partagée avec l'effet glow). */
+		animation: pseudo-pulse 3.2s ease-in-out infinite;
 	}
 	/* Le player est rendu en 1er dans le DOM (pour qu'il ne se remount pas en
 	   mode commentaire), mais on contrôle sa position visuelle via `order`. */
@@ -596,7 +762,8 @@
 			padding-top: 2rem;
 			padding-bottom: 1rem;
 		}
-		.pseudo { animation: none; }
+		.pseudo,
+		.pseudo .pseudo-text { animation: none; }
 		:global(.card .social-link img) { animation: none; }
 
 		/* Le lien "vidéo d'origine" n'a plus de sens : à ≤1000px on bascule sur
@@ -606,7 +773,8 @@
 
 	/* Respect des préférences système (utilisateur ayant demandé moins de mouvement). */
 	@media (prefers-reduced-motion: reduce) {
-		.pseudo { animation: none; }
+		.pseudo,
+		.pseudo .pseudo-text { animation: none; }
 		:global(.card .social-link img) { animation: none; }
 		.card { transition: none; }
 	}

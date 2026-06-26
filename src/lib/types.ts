@@ -29,6 +29,11 @@ export interface ThemeConfig {
 
 export type TitleAnimation = 'none' | 'blink-cursor';
 
+// Effet visuel appliqué au pseudo (h1) dans le header.
+// - glow : gradient blanc → couleur dominante de la PP + pulse text-shadow (default)
+// - cast-shadow : texte blanc + ombre dure colorée fixe + bounce élastique top-right
+export type NicknameEffect = 'glow' | 'cast-shadow';
+
 // Une entrée de la rangée de liens sociaux.
 // Soit `url` (lien externe), soit `copy` (texte copié au clic avec feedback "copié").
 // L'icône est inférée depuis `/shared/{name}.png` ; en cas de 404, fallback sur l'icône générique.
@@ -45,6 +50,8 @@ export interface SocialLinkConfig {
 export interface PageConfig {
 	displayName?: string; // affiché dans le header du container (et utilisé pour le <title>)
 	avatar?: string;      // chemin (relatif au dossier user ou absolu /u/.../...)
+	discordUserId?: string;   // snowflake (17–20 chiffres) ; requis si `useDiscordPfp` est true
+	useDiscordPfp?: boolean;  // si true et `discordUserId` valide, l'avatar est la PP Discord courante (résolue côté serveur, cache 1h)
 	favicon?: string;     // favicon spécifique à la page (relatif au dossier user ou URL absolue)
 	titleAnimation?: TitleAnimation; // animation appliquée au <title> dans l'onglet
 	background?: BackgroundConfig;
@@ -52,6 +59,7 @@ export interface PageConfig {
 	landing?: LandingConfig;
 	theme?: ThemeConfig;
 	socials?: SocialLinkConfig[];
+	nicknameEffect?: NicknameEffect;
 	customCss?: boolean;
 	customJs?: boolean;
 	showViewCounter?: boolean;

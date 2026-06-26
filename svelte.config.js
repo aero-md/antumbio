@@ -12,7 +12,7 @@ const config = {
 				'default-src': ['self'],
 				'script-src': ['self'],
 				'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
-				'img-src': ['self', 'data:'],
+				'img-src': ['self', 'data:', 'https://cdn.discordapp.com'],
 				'font-src': ['self', 'https://fonts.gstatic.com'],
 				'media-src': ['self'],
 				'connect-src': ['self'],

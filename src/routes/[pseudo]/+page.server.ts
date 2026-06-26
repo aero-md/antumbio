@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { readUserConfig, readUserHtml, isValidPseudo } from '$lib/server/pages';
+import { getDiscordAvatarUrl } from '$lib/server/discordAvatar';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
 	const { pseudo } = params;
@@ -11,5 +12,13 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	// Hint UX seulement : le serveur reste la source de vérité (409 si déjà commenté).
 	// Le cookie est posé après un POST réussi côté /api/comments.
 	const alreadyCommented = cookies.get(`commented_${pseudo}`) === '1';
-	return { pseudo, config, html, alreadyCommented };
+
+	// Gates user-facing avant d'entrer dans le module Discord : pas d'opt-in =
+	// pas d'I/O, même pas un lookup de cache.
+	const discordAvatarUrl =
+		config.useDiscordPfp && config.discordUserId
+			? await getDiscordAvatarUrl(config.discordUserId)
+			: null;
+
+	return { pseudo, config, html, alreadyCommented, discordAvatarUrl };
 };

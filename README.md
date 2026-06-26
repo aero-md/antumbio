@@ -39,6 +39,7 @@ CREATE DATABASE redsunsbio_test;
 | `DATABASE_URL` | Chaîne de connexion PostgreSQL |
 | `VISITOR_SECRET` | Secret serveur du HMAC d'identité visiteur. **Obligatoire** — l'app refuse de servir `/api/stats` sans. Générer un secret fort, unique par environnement, jamais commité. |
 | `DEFAULT_PSEUDO` | (optionnel) pseudo cible du redirect depuis `/` |
+| `DISCORD_BOT_TOKEN` | (optionnel) token d'une app Discord dédiée — active la résolution de la PP Discord pour les users opt-in (cf. section *PP Discord dynamique*). Absent = feature désactivée, un seul `warn` au premier hit. |
 | `ADDRESS_HEADER`, `XFF_DEPTH`, … | (prod derrière proxy) cf. doc adapter-node pour que `getClientAddress()` voie la vraie IP |
 
 ## Créer une page utilisateur
@@ -66,6 +67,37 @@ users/[pseudo]/
 Les assets sont servis par la route `/u/[pseudo]/[...path]` avec support `Range` (anti path-traversal lexical + `realpath`, MIME, 206 Partial Content pour audio/vidéo). Référence dans `index.html` : `<img src="/u/katemct/assets/avatar.png" />`, ou chemin relatif depuis `config.json` (résolution via `resolveAsset`). Un chemin absolu permet de pointer vers les assets d'une autre page.
 
 > **Sécurité** : `index.html` est rendu via `{@html}` côté Svelte — pas de sanitisation. Adapté à l'édition **manuelle** uniquement. Pour un futur mode self-service, il faudra sanitiser côté serveur et isoler chaque page (origine/iframe sandbox).
+
+### PP Discord dynamique
+
+L'avatar peut être résolu à la volée depuis l'API Discord plutôt que servi en statique. Utile quand on veut que la page reflète la PP courante d'un user Discord sans la re-uploader à chaque changement.
+
+Pré-requis serveur (une seule fois) :
+
+1. Créer une app Discord dédiée : https://discord.com/developers/applications → *New Application* → onglet *Bot* → *Reset Token* → copier la valeur.
+2. Aucun scope/intent particulier n'est requis. Le bot n'a pas besoin d'être présent dans un serveur ; l'endpoint `/users/{id}` est accessible avec n'importe quel bot token valide.
+3. Renseigner `DISCORD_BOT_TOKEN` dans `.env`.
+
+Côté `config.json` d'une page :
+
+```json
+{
+  "useDiscordPfp": true,
+  "discordUserId": "123456789012345678"
+}
+```
+
+`discordUserId` = snowflake Discord du user (17–20 chiffres). Pour le trouver côté Discord : *Paramètres > Avancé > Mode développeur*, puis clic droit sur le profil → *Copier l'identifiant*.
+
+Si l'utilisateur n'a pas de PP custom, la PP par défaut Discord (pomelo, `embed/avatars/{idx}.png`) est servie.
+
+Fallback sur `avatar` statique (ou pas d'avatar du tout si `avatar` absent) dans tous ces cas :
+
+- `useDiscordPfp` falsy ou `discordUserId` absent / format invalide → pas d'I/O, pas de log
+- `DISCORD_BOT_TOKEN` absent → un `warn` côté serveur au premier hit, puis silencieux
+- erreur HTTP (4xx/5xx, timeout) → un `warn` par hit, cache négatif 5min pour éviter de re-spammer
+
+Cache in-memory côté serveur, TTL 1h sur succès. Pas de propagation multi-instance (suffisant pour un déploiement mono-process).
 
 ## Build
 
