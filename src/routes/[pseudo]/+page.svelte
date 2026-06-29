@@ -126,6 +126,9 @@
 	let hasFinePointer = $state(false);
 	const MAX_TILT_DEG = 6;
 	const INSIDE_FACTOR = 1 / 3; // tilt atténué quand la souris survole le container
+	// La pillule est rendue HORS de la card (sibling dans `.card-stack`) et ne subit
+	// AUCUN tilt → elle reste figée face caméra pendant que la card s'incline en
+	// dessous, ce qui crée le contraste de profondeur.
 
 	// Détecte la présence d'une souris (vs tactile/stylo). Sur tactile, certains
 	// navigateurs synthétisent des `mousemove` au tap — filtrer l'event ne suffit
@@ -252,29 +255,9 @@
 
 <Background config={config.background} {assetBase} />
 
-<main
-	bind:this={cardEl}
-	class="card"
-	class:entered
-	style:filter={config.theme?.filter}
-	style:font-family={config.theme?.font}
-	style:transform={`rotateX(${rotX}deg) rotateY(${rotY}deg)`}
->
-	{#if config.music && entered}
-		<div class="player-slot" class:player-slot-top={showCommentForm}>
-			<AudioPlayer config={config.music} {assetBase} {entered} />
-		</div>
-	{/if}
-
-	{#if showCommentForm}
-		<CommentForm
-			{pseudo}
-			onCancel={cancelCommentForm}
-			onSubmitted={onCommentSubmitted}
-			onAlreadyCommented={onAlreadyCommentedFromServer}
-		/>
-	{:else}
-		<header class="pseudo-header">
+<div class="card-stack">
+	{#if !showCommentForm}
+		<header class="pseudo-header" class:entered>
 			{#if discordAvatarUrl || config.avatar}
 				<img
 					class="avatar"
@@ -293,14 +276,38 @@
 				<span class="pseudo-text">{config.displayName ?? pseudo}</span>
 			</h1>
 		</header>
-
-		{@html html}
-
-		{#if config.socials && config.socials.length > 0}
-			<SocialLinks socials={config.socials} />
-		{/if}
 	{/if}
-</main>
+
+	<main
+		bind:this={cardEl}
+		class="card"
+		class:entered
+		style:filter={config.theme?.filter}
+		style:font-family={config.theme?.font}
+		style:transform={`rotateX(${rotX}deg) rotateY(${rotY}deg)`}
+	>
+		{#if config.music && entered}
+			<div class="player-slot" class:player-slot-top={showCommentForm}>
+				<AudioPlayer config={config.music} {assetBase} {entered} />
+			</div>
+		{/if}
+
+		{#if showCommentForm}
+			<CommentForm
+				{pseudo}
+				onCancel={cancelCommentForm}
+				onSubmitted={onCommentSubmitted}
+				onAlreadyCommented={onAlreadyCommentedFromServer}
+			/>
+		{:else}
+			{@html html}
+
+			{#if config.socials && config.socials.length > 0}
+				<SocialLinks socials={config.socials} />
+			{/if}
+		{/if}
+	</main>
+</div>
 
 {#if !showCommentForm}
 	<button
@@ -346,6 +353,18 @@
 {/if}
 
 <style>
+	/* Scène 3D commune à la pillule et à la card : porte la perspective (qui n'est
+	   plus héritée depuis #app puisqu'on n'est plus enfant direct), et les fait
+	   stack verticalement. Chacun pivote indépendamment → vrai effet parallax. */
+	.card-stack {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2rem;
+		width: min(45rem, 100%);
+		perspective: 1400px;
+	}
 	.card {
 		position: relative;
 		z-index: 2;
@@ -356,7 +375,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1.7rem;
-		width: min(45rem, 100%);
+		width: 100%;
 		padding: 2.5rem 3rem;
 		text-align: center;
 		background: rgba(0, 0, 0, 0.5);
@@ -381,24 +400,45 @@
 	   l'espace entre les autres blocs internes. */
 	.pseudo-header {
 		position: relative;
+		z-index: 3;
 		display: inline-flex;
 		align-items: center;
 		gap: 2rem;
 		padding: 0.7rem;
-		margin-bottom: 1rem;
 		border-radius: 999px;
+		/* Highlights glass en multi-background (top highlight + rebond bas). Les
+		   gradients sont en % du box → clippés naturellement par le border-radius. */
+		background:
+			radial-gradient(
+				ellipse 60% 50% at 25% 10%,
+				rgba(255, 255, 255, 0.5) 0%,
+				rgba(255, 255, 255, 0.12) 50%,
+				rgba(255, 255, 255, 0) 80%
+			),
+			radial-gradient(
+				ellipse 80% 25% at 50% 95%,
+				rgba(255, 255, 255, 0.18) 0%,
+				rgba(255, 255, 255, 0) 75%
+			);
 		box-shadow:
 			0 14px 30px rgba(0, 0, 0, 0.6),
 			0 3px 10px rgba(0, 0, 0, 0.45),
 			0 0 0 1px rgba(255, 255, 255, 0.18),
 			inset 0 1px 1px rgba(255, 255, 255, 0.45),
 			inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+		transition: opacity 0.5s ease;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.pseudo-header.entered {
+		opacity: 1;
+		pointer-events: auto;
 	}
 	.pseudo-header .avatar {
 		position: relative;
 		z-index: 1;
-		width: 5rem;
-		height: 5rem;
+		width: 4rem;
+		height: 4rem;
 		border-radius: 50%;
 		object-fit: cover;
 		display: block;
@@ -410,36 +450,6 @@
 			0 0 0 1px rgba(0, 0, 0, 0.3);
 		flex-shrink: 0;
 	}
-	/* Reflet spéculaire qui balaie le haut de la capsule, ellipse large pour
-	   couvrir toute la longueur de la pillule. */
-	.pseudo-header::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		background: radial-gradient(
-			ellipse 60% 50% at 25% 10%,
-			rgba(255, 255, 255, 0.5) 0%,
-			rgba(255, 255, 255, 0.12) 50%,
-			rgba(255, 255, 255, 0) 80%
-		);
-		pointer-events: none;
-		z-index: 2;
-	}
-	/* Rebond léger en bas, plus étalé pour suivre la pillule. */
-	.pseudo-header::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		background: radial-gradient(
-			ellipse 80% 25% at 50% 95%,
-			rgba(255, 255, 255, 0.18) 0%,
-			rgba(255, 255, 255, 0) 75%
-		);
-		pointer-events: none;
-		z-index: 2;
-	}
 	/* Pseudo : base commune. Les effets visuels (glow / cast-shadow) sont scopés
 	   par [data-effect]. line-height 0.85 resserre le line-box sur les x-height
 	   letters → l'écriture all-lowercase apparaît centrée verticalement. */
@@ -450,7 +460,7 @@
 		padding-right: 2.1rem;
 		font-family: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
 		font-weight: 400;
-		font-size: 3.5rem;
+		font-size: 2.5rem;
 		line-height: 0.70;
 		letter-spacing: 0.01em;
 		text-transform: lowercase;
@@ -463,6 +473,7 @@
 		display: inline-block;
 		position: relative;
 		z-index: 1;
+		bottom: 0.1rem
 	}
 	/* Glow (default) : gradient blanc → couleur PP + pulse text-shadow. text-shadow
 	   se rend à partir de la forme du glyphe, donc fonctionne malgré color: transparent. */
