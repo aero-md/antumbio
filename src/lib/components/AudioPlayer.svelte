@@ -166,15 +166,19 @@
 </div>
 
 <style>
+	/* Forme pillule (cohérente avec .pseudo-header de la page). Pas d'overflow
+	   hidden : rien ne doit être clippé par le radius, donc la thumb est ronde
+	   (elle s'emboîte dans le cap gauche) et le padding droit est élargi pour que
+	   titre/contrôles restent en dedans de la courbe du cap droit. */
 	.player {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 		width: 100%;
-		padding: 0.55rem;
+		padding: 0.55rem 1.4rem 0.55rem 0.55rem;
 		background: rgba(0, 0, 0, 0.55);
 		backdrop-filter: blur(8px);
-		border-radius: 0.7rem;
+		border-radius: 999px;
 		color: white;
 		font-size: 0.85rem;
 		border: 1px solid rgba(255, 255, 255, 0.08);
@@ -188,7 +192,7 @@
 	.thumb {
 		width: 48px;
 		height: 48px;
-		border-radius: 0.4rem;
+		border-radius: 50%;
 		object-fit: cover;
 		display: block;
 	}
@@ -200,7 +204,7 @@
 		justify-content: center;
 		background: rgba(0, 0, 0, 0.55);
 		border: none;
-		border-radius: 0.4rem;
+		border-radius: 50%;
 		color: white;
 		cursor: pointer;
 		opacity: 0;
@@ -315,6 +319,12 @@
 	   [progress pleine largeur] sur la 2e. L'overlay play/pause de la thumb
 	   est désactivé (moins utile au tap qu'un bouton dédié). */
 	@media (max-width: 600px) {
+		/* Le layout 2 lignes rend le player plus haut → caps de la pillule plus
+		   larges. Sans ce padding, la barre de progression (pleine largeur, rangée
+		   du bas) déborderait de la courbe aux coins inférieurs. */
+		.player {
+			padding-inline: 1.1rem;
+		}
 		.controls {
 			grid-template-columns: auto auto auto auto 1fr minmax(0, auto);
 			grid-template-rows: auto auto;

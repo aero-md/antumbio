@@ -126,9 +126,6 @@
 	let hasFinePointer = $state(false);
 	const MAX_TILT_DEG = 6;
 	const INSIDE_FACTOR = 1 / 3; // tilt atténué quand la souris survole le container
-	// La pillule est rendue HORS de la card (sibling dans `.card-stack`) et ne subit
-	// AUCUN tilt → elle reste figée face caméra pendant que la card s'incline en
-	// dessous, ce qui crée le contraste de profondeur.
 
 	// Détecte la présence d'une souris (vs tactile/stylo). Sur tactile, certains
 	// navigateurs synthétisent des `mousemove` au tap — filtrer l'event ne suffit
@@ -256,28 +253,6 @@
 <Background config={config.background} {assetBase} />
 
 <div class="card-stack">
-	{#if !showCommentForm}
-		<header class="pseudo-header" class:entered>
-			{#if discordAvatarUrl || config.avatar}
-				<img
-					class="avatar"
-					src={discordAvatarUrl ?? resolveAsset(assetBase, config.avatar!)}
-					alt={config.displayName ?? pseudo}
-				/>
-			{/if}
-			<h1
-				class="pseudo"
-				data-effect={config.nicknameEffect ?? 'glow'}
-				style:--pseudo-accent={pseudoColor}
-			>
-				{#if (config.nicknameEffect ?? 'glow') === 'cast-shadow'}
-					<span class="pseudo-shadow" aria-hidden="true">{config.displayName ?? pseudo}</span>
-				{/if}
-				<span class="pseudo-text">{config.displayName ?? pseudo}</span>
-			</h1>
-		</header>
-	{/if}
-
 	<main
 		bind:this={cardEl}
 		class="card"
@@ -300,6 +275,26 @@
 				onAlreadyCommented={onAlreadyCommentedFromServer}
 			/>
 		{:else}
+			<header class="pseudo-header">
+				{#if discordAvatarUrl || config.avatar}
+					<img
+						class="avatar"
+						src={discordAvatarUrl ?? resolveAsset(assetBase, config.avatar!)}
+						alt={config.displayName ?? pseudo}
+					/>
+				{/if}
+				<h1
+					class="pseudo"
+					data-effect={config.nicknameEffect ?? 'glow'}
+					style:--pseudo-accent={pseudoColor}
+				>
+					{#if (config.nicknameEffect ?? 'glow') === 'cast-shadow'}
+						<span class="pseudo-shadow" aria-hidden="true">{config.displayName ?? pseudo}</span>
+					{/if}
+					<span class="pseudo-text">{config.displayName ?? pseudo}</span>
+				</h1>
+			</header>
+
 			{@html html}
 
 			{#if config.socials && config.socials.length > 0}
@@ -353,9 +348,8 @@
 {/if}
 
 <style>
-	/* Scène 3D commune à la pillule et à la card : porte la perspective (qui n'est
-	   plus héritée depuis #app puisqu'on n'est plus enfant direct), et les fait
-	   stack verticalement. Chacun pivote indépendamment → vrai effet parallax. */
+	/* Scène 3D : porte la perspective pour le tilt de la card (non héritée depuis
+	   #app puisqu'on n'est plus enfant direct). */
 	.card-stack {
 		position: relative;
 		display: flex;
@@ -395,44 +389,23 @@
 		opacity: 1;
 		pointer-events: auto;
 	}
-	/* Capsule liquidglass : pillule au sommet de la card. margin-bottom s'ajoute
-	   au gap flex de la card (1.7rem) → l'espace en-dessous est plus aéré que
-	   l'espace entre les autres blocs internes. */
+	/* Pillule pseudo+PFP au sommet de la card. Padding vertical/gauche nul →
+	   l'avatar (4rem, le plus haut du flex) impose la hauteur, donc le cap gauche
+	   du radius 999px a exactement le rayon de l'avatar : bord flush avec la PFP.
+	   L'espacement autour du texte vient des margins du h1. Fond assorti au
+	   lecteur audio (même verre sombre + même liseré). */
 	.pseudo-header {
-		position: relative;
-		z-index: 3;
 		display: inline-flex;
 		align-items: center;
-		gap: 2rem;
-		padding: 0.7rem;
+		padding: 0 0.5rem 0 0;
+		/* S'ajoute au gap flex de la card (1.7rem) → la pillule respire un peu
+		   plus vis-à-vis du contenu en dessous. */
+		margin-bottom: 0.75rem;
 		border-radius: 999px;
-		/* Highlights glass en multi-background (top highlight + rebond bas). Les
-		   gradients sont en % du box → clippés naturellement par le border-radius. */
-		background:
-			radial-gradient(
-				ellipse 60% 50% at 25% 10%,
-				rgba(255, 255, 255, 0.5) 0%,
-				rgba(255, 255, 255, 0.12) 50%,
-				rgba(255, 255, 255, 0) 80%
-			),
-			radial-gradient(
-				ellipse 80% 25% at 50% 95%,
-				rgba(255, 255, 255, 0.18) 0%,
-				rgba(255, 255, 255, 0) 75%
-			);
-		box-shadow:
-			0 14px 30px rgba(0, 0, 0, 0.6),
-			0 3px 10px rgba(0, 0, 0, 0.45),
-			0 0 0 1px rgba(255, 255, 255, 0.18),
-			inset 0 1px 1px rgba(255, 255, 255, 0.45),
-			inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-		transition: opacity 0.5s ease;
-		opacity: 0;
-		pointer-events: none;
-	}
-	.pseudo-header.entered {
-		opacity: 1;
-		pointer-events: auto;
+		background: rgba(0, 0, 0, 0.55);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border: 1px solid rgba(255, 255, 255, 0.08);
 	}
 	.pseudo-header .avatar {
 		position: relative;
@@ -451,19 +424,18 @@
 		flex-shrink: 0;
 	}
 	/* Pseudo : base commune. Les effets visuels (glow / cast-shadow) sont scopés
-	   par [data-effect]. line-height 0.85 resserre le line-box sur les x-height
-	   letters → l'écriture all-lowercase apparaît centrée verticalement. */
+	   par [data-effect]. line-height 0.70 resserre le line-box sur les glyphes
+	   → le texte apparaît centré verticalement dans la pillule. */
 	.pseudo {
 		position: relative;
 		z-index: 3;
-		margin: 0;
-		padding-right: 2.1rem;
+		margin: 0 1.5rem;
+		padding: 0;
 		font-family: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
 		font-weight: 400;
 		font-size: 2.5rem;
 		line-height: 0.70;
 		letter-spacing: 0.01em;
-		text-transform: lowercase;
 		color: white;
 		/* Décale visuellement vers le haut pour compenser le typographic offset
 		   des x-height letters (Cormorant baseline + leading résiduel). */
@@ -473,7 +445,6 @@
 		display: inline-block;
 		position: relative;
 		z-index: 1;
-		bottom: 0.1rem
 	}
 	/* Glow (default) : gradient blanc → couleur PP + pulse text-shadow. text-shadow
 	   se rend à partir de la forme du glyphe, donc fonctionne malgré color: transparent. */

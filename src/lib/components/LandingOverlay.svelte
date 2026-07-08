@@ -107,7 +107,6 @@
 		font-size: 1.44rem;
 		font-weight: 600;
 		letter-spacing: 0.15em;
-		text-transform: lowercase;
 		text-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
 		animation: pulse 1.6s ease-in-out infinite;
 	}

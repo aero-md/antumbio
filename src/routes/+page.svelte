@@ -1,5 +1,5 @@
 <script lang="ts">
-	const GITHUB_URL = 'https://github.com/a-e-r-o';
+	const GITHUB_URL = 'https://github.com/aero-md';
 
 	// Scope les overrides CSS de la home (cf. bloc style plus bas) via la classe `html.is-home`.
 	// En SSR / full-load, la classe est posée par hooks.server.ts (transformPageChunk)
@@ -120,7 +120,7 @@
 	<footer class="foot">
 		<a class="github" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
 			<img src="/shared/github.png" alt="" aria-hidden="true" />
-			<span>github.com/a-e-r-o</span>
+			<span>github.com/aero-md</span>
 		</a>
 	</footer>
 </div>
