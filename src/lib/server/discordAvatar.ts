@@ -16,6 +16,23 @@ const cache = new Map<string, CacheEntry>();
 // par process pour ne pas spammer les logs à chaque pageview.
 let tokenWarnLogged = false;
 
+function avatarUrl(userId: string, hash: string): string {
+	// Une PP animée a un hash préfixé `a_`. Toutes les extensions statiques (.png, .webp,
+	// .jpg) marchent sur ce hash mais n'en servent que la première frame.
+	//
+	// Piège : `.gif`, que la doc Discord donne encore comme LE format animé, renvoie
+	// un **415** sur le CDN (vérifié sur un hash `a_` réel). L'animation ne sort plus
+	// que via `.webp?animated=true` — c'est ce que demande le client Discord lui-même.
+	// Ne pas "corriger" ça en repassant au .gif.
+	//
+	// size=128 : l'avatar fait 4rem (64 px), donc 128 couvre le retina 2x. Le 256
+	// animé pèse 4× plus lourd (~590 Ko contre ~250) pour un disque de 64 px.
+	if (hash.startsWith('a_')) {
+		return `https://cdn.discordapp.com/avatars/${userId}/${hash}.webp?size=128&animated=true`;
+	}
+	return `https://cdn.discordapp.com/avatars/${userId}/${hash}.png?size=256`;
+}
+
 function defaultAvatarUrl(userId: string): string {
 	// Système pomelo (post-2023) : index = (id >> 22) % 6. BigInt parce que les snowflakes
 	// dépassent Number.MAX_SAFE_INTEGER.
@@ -64,9 +81,7 @@ export async function getDiscordAvatarUrl(userId: string): Promise<string | null
 		}
 
 		const user = (await res.json()) as { id: string; avatar: string | null };
-		const url = user.avatar
-			? `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.png?size=256`
-			: defaultAvatarUrl(userId);
+		const url = user.avatar ? avatarUrl(userId, user.avatar) : defaultAvatarUrl(userId);
 
 		cache.set(userId, { url, expiresAt: now + SUCCESS_TTL_MS });
 		return url;

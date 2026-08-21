@@ -60,6 +60,8 @@ users/[pseudo]/
 
 > **Versionnement** : le contenu réel de `users/` n'est **pas** committé (vie privée + médias lourds) — cf. `.gitignore`. Seul le template **`users/_example/`** est dans le repo pour montrer la structure. Pour démarrer : copiez `users/_example/` vers `users/<pseudo>/` et personnalisez.
 
+Un avatar statique (`config.avatar`) accepte `png` / `jpg` / `webp` / `gif` — un GIF animé s'anime tel quel, la route d'assets le sert en `image/gif`.
+
 **`config.json`** ne gère que l'infrastructure (fond, audio, landing, theme, view counter, displayName pour le `<title>`). Schéma dans `src/lib/types.ts` (interface `PageConfig`). Exemple complet : `users/_example/config.json`.
 
 **`index.html`** est un fragment HTML libre injecté dans le `<main class="card">`. Le music player est auto-ajouté en bas du container si `config.music` est défini. Styles par défaut disponibles pour les conventions usuelles : `h1`, `p`, `.avatar`, `.links a` (cf. `src/routes/[pseudo]/+page.svelte`). Le user peut tout overrider via `style.css` (`customCss: true`).
@@ -90,6 +92,8 @@ Côté `config.json` d'une page :
 `discordUserId` = snowflake Discord du user (17–20 chiffres). Pour le trouver côté Discord : *Paramètres > Avancé > Mode développeur*, puis clic droit sur le profil → *Copier l'identifiant*.
 
 Si l'utilisateur n'a pas de PP custom, la PP par défaut Discord (pomelo, `embed/avatars/{idx}.png`) est servie.
+
+**PP animées** : un hash d'avatar préfixé `a_` correspond à une PP animée (Nitro). Elle est servie en `…​.webp?size=128&animated=true` — les extensions statiques (`.png`, `.jpg`, `.webp` sans `animated`) n'en rendent que la première frame, et le `.gif` que documente encore Discord renvoie un **415** sur le CDN (vérifié sur un hash `a_` réel). Les hashes non animés restent en `.png?size=256`.
 
 Fallback sur `avatar` statique (ou pas d'avatar du tout si `avatar` absent) dans tous ces cas :
 
