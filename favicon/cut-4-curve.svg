@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs><mask id="c4">
-    <rect width="32" height="32" fill="#fff"/>
-    <ellipse cx="16" cy="34" rx="20" ry="9" fill="#000"/>
-  </mask></defs>
-  <circle cx="16" cy="16" r="14" fill="#ff2040" mask="url(#c4)"/>
-  <circle cx="16" cy="16" r="6" fill="#1a0008"/>
-</svg>
