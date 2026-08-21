@@ -1,5 +1,10 @@
 <script lang="ts">
+	import { watchTabFavicon } from '$lib/favicon';
+
 	const GITHUB_URL = 'https://github.com/aero-md';
+
+	// Le favicon passe au gris quand l'onglet part en arrière-plan.
+	$effect(watchTabFavicon);
 
 	// Scope les overrides CSS de la home (cf. bloc style plus bas) via la classe `html.is-home`.
 	// En SSR / full-load, la classe est posée par hooks.server.ts (transformPageChunk)

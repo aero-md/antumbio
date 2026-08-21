@@ -1,6 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs><clipPath id="c3"><rect x="0" y="0" width="32" height="25"/></clipPath></defs>
-  <circle cx="16" cy="16" r="14" fill="#ff2040" clip-path="url(#c3)"/>
-  <circle cx="16" cy="16" r="6" fill="#1a0008"/>
-  <rect x="3" y="27.5" width="26" height="3.5" rx="1.75" fill="#ff2040"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- bio — le favicon de suns.red, paramètres identiques : viewBox de 100, pas
+       de 20 unités, point de 14 (r=7), écart point à point de 6 u, #D3001F.
+       Seul le masque change. C'est le glyphe 5×5 qui désigne bio.suns.red dans
+       le tableau de suns.red, repris bit pour bit — un « B » ajouré, hampe
+       pleine et panses ouvertes. 14 points sur 25 au lieu de 21.
+         ●●●·●
+         ●··●·
+         ●●●··
+         ●··●·
+         ●●●··
+       Une conséquence à connaître : chez suns.red la trame est pleine, chaque
+       point a quatre voisins, et l'écart de 6 u — 0,96 px en favicon 16, sous
+       le pixel — referme le dessin en disque au plus petit format. Ici le
+       masque est clairsemé : les points isolés n'ont personne contre qui se
+       souder, donc la trame ne se referme jamais et le glyphe reste une figure
+       de points à toutes les tailles. La lettre se lit à partir de 24 ; à 16
+       elle donne une signature de points, pas une masse.
+       La teinte inactive n'est pas ici : elle est calculée dans
+       `src/lib/favicon.ts`, qui importe ce fichier et rejoue son #D3001F. Ne
+       pas passer la couleur en `currentColor` ni en variable, le reteintage
+       repose sur le littéral. -->
+  <g fill="#D3001F">
+    <circle cx="10" cy="10" r="7" />
+    <circle cx="30" cy="10" r="7" />
+    <circle cx="50" cy="10" r="7" />
+    <circle cx="90" cy="10" r="7" />
+    <circle cx="10" cy="30" r="7" />
+    <circle cx="70" cy="30" r="7" />
+    <circle cx="10" cy="50" r="7" />
+    <circle cx="30" cy="50" r="7" />
+    <circle cx="50" cy="50" r="7" />
+    <circle cx="10" cy="70" r="7" />
+    <circle cx="70" cy="70" r="7" />
+    <circle cx="10" cy="90" r="7" />
+    <circle cx="30" cy="90" r="7" />
+    <circle cx="50" cy="90" r="7" />
+  </g>
 </svg>

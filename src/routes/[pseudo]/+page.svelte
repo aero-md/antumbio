@@ -9,6 +9,11 @@
 	import CommentForm from '$lib/components/CommentForm.svelte';
 	import { resolveAsset } from '$lib/path';
 	import { getVisitorId } from '$lib/fingerprint';
+	import { watchTabFavicon } from '$lib/favicon';
+
+	// Le favicon passe au gris quand l'onglet part en arrière-plan — sans effet
+	// si la page sert le favicon de son utilisateur, qui n'est pas à nous.
+	$effect(watchTabFavicon);
 
 	function faviconType(src: string): string {
 		const s = src.toLowerCase();
