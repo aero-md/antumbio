@@ -87,7 +87,7 @@
 
 		<article class="feature">
 			<div class="feature-cell">
-				<h3>Commentaires</h3>
+				<h3>Messages</h3>
 				<p>Anonymes. Visibles uniquement par le titulaire de la page.</p>
 			</div>
 			<span class="feature-split" aria-hidden="true"></span>

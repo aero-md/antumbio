@@ -1,0 +1,33 @@
+<!--
+  Fragment HTML de l'onglet « Détails ». OPTIONNEL : si ce fichier est absent ou
+  vide, l'onglet n'apparaît pas du tout sur la page.
+  Édition manuelle uniquement : rendu via {@html}, non sanitisé — comme index.html.
+  Conventions de style disponibles : section + h2, .tags (centres d'intérêt),
+  .facts (<dl> infos clés), p, .separator (cf. src/routes/[pseudo]/+page.svelte).
+-->
+<section>
+	<h2>À propos</h2>
+	<p>
+		Quelques lignes de présentation. Plus long et plus posé que le résumé —
+		c'est l'onglet où on peut se permettre du texte.
+	</p>
+</section>
+
+<section>
+	<h2>Centres d'intérêt</h2>
+	<ul class="tags">
+		<li>Un truc</li>
+		<li>Un autre truc</li>
+		<li><img src="/u/_example/assets/icon.png" alt="" /> Avec une icône</li>
+	</ul>
+</section>
+
+<section>
+	<h2>En bref</h2>
+	<dl class="facts">
+		<dt>Basé à</dt>
+		<dd>Quelque part</dd>
+		<dt>Setup</dt>
+		<dd>Un clavier et beaucoup d'espoir</dd>
+	</dl>
+</section>

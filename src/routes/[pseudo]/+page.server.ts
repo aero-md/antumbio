@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { readUserConfig, readUserHtml, isValidPseudo } from '$lib/server/pages';
+import { readUserConfig, readUserHtml, readUserDetailsHtml, isValidPseudo } from '$lib/server/pages';
 import { getDiscordAvatarUrl } from '$lib/server/discordAvatar';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	if (!isValidPseudo(pseudo)) throw error(404, 'Page not found');
 	const config = await readUserConfig(pseudo);
 	if (!config) throw error(404, 'Page not found');
-	const html = await readUserHtml(pseudo);
+	const [html, detailsHtml] = await Promise.all([readUserHtml(pseudo), readUserDetailsHtml(pseudo)]);
 	// Hint UX seulement : le serveur reste la source de vérité (409 si déjà commenté).
 	// Le cookie est posé après un POST réussi côté /api/comments.
 	const alreadyCommented = cookies.get(`commented_${pseudo}`) === '1';
@@ -20,5 +20,5 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 			? await getDiscordAvatarUrl(config.discordUserId)
 			: null;
 
-	return { pseudo, config, html, alreadyCommented, discordAvatarUrl };
+	return { pseudo, config, html, detailsHtml, alreadyCommented, discordAvatarUrl };
 };

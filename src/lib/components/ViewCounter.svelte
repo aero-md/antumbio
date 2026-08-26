@@ -49,7 +49,7 @@
 		<span class="value">{count ?? '—'}</span>
 	</span>
 	<span class="sep" aria-hidden="true"></span>
-	<span class="metric" title="commentaires">
+	<span class="metric" title="messages">
 		<span class="icon" aria-hidden="true">💬</span>
 		<span class="value">{commentCount ?? '—'}</span>
 	</span>

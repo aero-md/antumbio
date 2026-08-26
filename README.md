@@ -49,7 +49,8 @@ Chaque page = un dossier `users/[pseudo]/`. Pseudo = `^[a-z0-9_-]{1,32}$`.
 ```
 users/[pseudo]/
 ├── config.json          # obligatoire — infrastructure (bg, audio, landing, theme…)
-├── index.html           # obligatoire — contenu HTML injecté dans le container principal
+├── index.html           # obligatoire — contenu de l'onglet « Résumé »
+├── details.html         # optionnel — contenu de l'onglet « Détails » (absent = pas d'onglet)
 ├── style.css            # optionnel — si customCss: true dans config
 ├── script.js            # optionnel — si customJs: true dans config
 └── assets/
@@ -65,6 +66,32 @@ Un avatar statique (`config.avatar`) accepte `png` / `jpg` / `webp` / `gif` — 
 **`config.json`** ne gère que l'infrastructure (fond, audio, landing, theme, view counter, displayName pour le `<title>`). Schéma dans `src/lib/types.ts` (interface `PageConfig`). Exemple complet : `users/_example/config.json`.
 
 **`index.html`** est un fragment HTML libre injecté dans le `<main class="card">`. Le music player est auto-ajouté en bas du container si `config.music` est défini. Styles par défaut disponibles pour les conventions usuelles : `h1`, `p`, `.avatar`, `.links a` (cf. `src/routes/[pseudo]/+page.svelte`). Le user peut tout overrider via `style.css` (`customCss: true`).
+
+### Onglets de la carte
+
+La carte a une barre d'onglets collée à son bord inférieur, à l'intérieur. Seul le panneau central change, et la hauteur de la carte s'anime d'un onglet à l'autre (mesure JS + transition ; clampée à la hauteur du viewport, le panneau devient scrollable au-delà).
+
+| Onglet | Contenu | Présent si |
+|---|---|---|
+| **résumé** (défaut) | `index.html` + la rangée de liens sociaux | toujours |
+| **détails** | `details.html` | `details.html` a du contenu réel |
+| **contact** | formulaire de message (ou l'état *déjà envoyé*) | toujours |
+
+Hors « résumé », la carte reprend la disposition du formulaire d'origine : le header (PP + pseudo) se replie et le lecteur audio remonte en tête. Le lecteur n'est jamais démonté au changement d'onglet — il est rendu en premier dans le DOM et repositionné en CSS via `order`, sinon la musique se couperait.
+
+« A du contenu réel » = une fois les commentaires HTML et les blancs retirés, il reste quelque chose (`hasRenderableContent`, `src/lib/server/pages.ts`). Un `_example/details.html` recopié puis vidé de ses sections ne crée donc pas d'onglet mort.
+
+**`details.html`** est un second fragment HTML libre, mêmes règles que `index.html` (édition manuelle, rendu via `{@html}`, **non sanitisé**). Il est enveloppé dans un bloc aligné à gauche, calqué sur le formulaire de contact : chaque `<section>` se lit comme un champ, libellé au-dessus, corps encadré.
+
+| Sélecteur | Rendu |
+|---|---|
+| `<section>` | Bloc « champ » : libellé + corps |
+| `<h2>` dans une `<section>` | Le libellé — petit, gris clair, sans encadré |
+| Tout autre enfant direct de `<section>` | Le corps : fond sombre, bordure fine, coins arrondis (mêmes valeurs que les `input`/`textarea` du formulaire) |
+| `<ul class="tags">` | Rangée de pastilles (centres d'intérêt) ; un `<img>` dans un `<li>` devient une icône 1rem |
+| `<dl class="facts">` | Grille deux colonnes label / valeur (infos clés) |
+
+Exemple complet : `users/_example/details.html`. Tout est surchargeable via `style.css`.
 
 Les assets sont servis par la route `/u/[pseudo]/[...path]` avec support `Range` (anti path-traversal lexical + `realpath`, MIME, 206 Partial Content pour audio/vidéo). Référence dans `index.html` : `<img src="/u/katemct/assets/avatar.png" />`, ou chemin relatif depuis `config.json` (résolution via `resolveAsset`). Un chemin absolu permet de pointer vers les assets d'une autre page.
 

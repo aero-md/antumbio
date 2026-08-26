@@ -7,6 +7,7 @@
 	import SocialLinks from '$lib/components/SocialLinks.svelte';
 	import ViewCounter from '$lib/components/ViewCounter.svelte';
 	import CommentForm from '$lib/components/CommentForm.svelte';
+	import CardTabs, { type Tab } from '$lib/components/CardTabs.svelte';
 	import { resolveAsset } from '$lib/path';
 	import { getVisitorId } from '$lib/fingerprint';
 	import { watchTabFavicon } from '$lib/favicon';
@@ -28,11 +29,12 @@
 	interface Props { data: PageData; }
 	let { data }: Props = $props();
 
-	const { pseudo, config, html, discordAvatarUrl } = $derived(
+	const { pseudo, config, html, detailsHtml, discordAvatarUrl } = $derived(
 		data as {
 			pseudo: string;
 			config: NonNullable<PageData['config']>;
 			html: string;
+			detailsHtml: string;
 			alreadyCommented: boolean;
 			discordAvatarUrl: string | null;
 		}
@@ -132,6 +134,23 @@
 	const MAX_TILT_DEG = 6;
 	const INSIDE_FACTOR = 1 / 3; // tilt atténué quand la souris survole le container
 
+	// Le tilt suit la souris en continu. Pendant qu'on change d'onglet, la carte
+	// change aussi de taille : son centre bouge sous le curseur immobile, et le
+	// tilt se met à basculer tout seul par-dessus l'animation de hauteur. On le
+	// remet à plat et on le gèle le temps que tout se repose.
+	const TILT_FREEZE_MS = 2000;
+	let tiltFrozen = $state(false);
+	let tiltTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function freezeTilt() {
+		tiltFrozen = true;
+		rotX = 0;
+		rotY = 0;
+		clearTimeout(tiltTimer);
+		tiltTimer = setTimeout(() => (tiltFrozen = false), TILT_FREEZE_MS);
+	}
+	$effect(() => () => clearTimeout(tiltTimer));
+
 	// Détecte la présence d'une souris (vs tactile/stylo). Sur tactile, certains
 	// navigateurs synthétisent des `mousemove` au tap — filtrer l'event ne suffit
 	// pas, on n'attache simplement pas le listener si pas de hover/pointer fin.
@@ -151,7 +170,7 @@
 		}
 
 		function onMouseMove(e: MouseEvent) {
-			if (!cardEl) return;
+			if (!cardEl || tiltFrozen) return;
 			const r = cardEl.getBoundingClientRect();
 			const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
 			const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
@@ -204,12 +223,75 @@
 		}
 	});
 
+	// ===== Onglets de la carte =====
+	// « Détails » n'existe que si le user a posé un details.html non vide.
+	type TabId = 'summary' | 'details' | 'comments';
+	let activeTab = $state<TabId>('summary');
+	const tabs = $derived<Tab[]>([
+		{ id: 'summary', label: 'résumé' },
+		...(detailsHtml.trim() ? [{ id: 'details', label: 'détails' }] : []),
+		// L'id reste `comments` : c'est le formulaire de commentaire derrière, seul le
+		// libellé change.
+		{ id: 'comments', label: 'contact' }
+	]);
+	// Garde-fou si le details.html disparaît d'un load à l'autre (navigation client).
+	$effect(() => {
+		if (!tabs.some((t) => t.id === activeTab)) activeTab = 'summary';
+	});
+
+	// Point d'entrée unique pour changer d'onglet — c'est là que le tilt se fige.
+	function selectTab(id: TabId) {
+		if (id === activeTab) return;
+		activeTab = id;
+		freezeTilt();
+	}
+
+	// « Résumé » est la vue vitrine : PP + pseudo en tête. « Détails » et
+	// « contact » sont des vues de lecture/saisie et reprennent la disposition
+	// d'origine du formulaire de commentaire — header masqué, lecteur remonté en
+	// haut, le panneau occupe toute la carte.
+	const bareLayout = $derived(activeTab !== 'summary');
+
+	// Hauteur animée : on mesure le panneau actif et on la reporte sur le conteneur,
+	// qui la transitionne. Sans ça la carte saute d'un onglet à l'autre, ce qui est
+	// particulièrement moche avec le tilt 3D.
+	let panelEl = $state<HTMLElement | null>(null);
+	let contentHeight = $state<number | null>(null);
+
+	$effect(() => {
+		const el = panelEl;
+		if (!el) return;
+		const ro = new ResizeObserver(() => (contentHeight = el.offsetHeight));
+		ro.observe(el);
+		contentHeight = el.offsetHeight;
+		return () => ro.disconnect();
+	});
+
+	// Le body est en overflow:hidden : un panneau plus haut que le viewport ferait
+	// déborder la carte hors écran sans moyen d'y accéder. On plafonne et on scrolle
+	// à l'intérieur. Le reste de la carte (gaps + tabs + paddings de la carte et de
+	// #app, plus le header quand il est là) tient dans la réserve ci-dessous.
+	let viewportH = $state(0);
+	$effect(() => {
+		const apply = () => (viewportH = window.innerHeight);
+		apply();
+		window.addEventListener('resize', apply);
+		return () => window.removeEventListener('resize', apply);
+	});
+	const chromeReserve = $derived(bareLayout ? 180 : 260);
+	const maxPanelHeight = $derived(
+		viewportH ? Math.max(200, viewportH - chromeReserve) : Infinity
+	);
+	const panelHeight = $derived(
+		contentHeight === null ? null : Math.min(contentHeight, maxPanelHeight)
+	);
+	const panelClamped = $derived(contentHeight !== null && contentHeight > maxPanelHeight);
+
 	// État du formulaire de commentaire.
 	// Source initiale : cookie lu en SSR (hint). Le serveur reste autoritaire via 409.
 	// On override seulement une fois que l'utilisateur poste (ou que le serveur dit 409).
 	let postedOverride = $state(false);
 	const alreadyCommented = $derived(postedOverride || data.alreadyCommented);
-	let showCommentForm = $state(false);
 	let justSubmitted = $state(false);
 
 	// Préchauffe le visitorId au mount (FingerprintJS prend ~200ms) pour qu'il
@@ -218,22 +300,13 @@
 		void getVisitorId();
 	});
 
-	function openCommentForm() {
-		if (alreadyCommented) return;
-		showCommentForm = true;
-	}
-	function cancelCommentForm() {
-		showCommentForm = false;
-	}
 	let counterApi: { incrementComments: () => void } | null = null;
 	function onCommentSubmitted() {
-		showCommentForm = false;
 		postedOverride = true;
 		justSubmitted = true;
 		counterApi?.incrementComments();
 	}
 	function onAlreadyCommentedFromServer() {
-		showCommentForm = false;
 		postedOverride = true;
 	}
 </script>
@@ -248,16 +321,14 @@
 	{#if config.customCss}
 		<link rel="stylesheet" href={`${assetBase}/style.css`} />
 	{/if}
-	{#if config.theme?.accent}
-		<style>
-			:root { --accent: {config.theme.accent}; }
-		</style>
-	{/if}
 </svelte:head>
 
 <Background config={config.background} {assetBase} />
 
-<div class="card-stack">
+<!-- `--accent` posé ici et pas via un <style> dans <svelte:head> : Svelte lit le
+     contenu d'un <style> comme du texte brut, l'interpolation n'y était jamais
+     évaluée (la variable valait littéralement « {config.theme.accent} »). -->
+<div class="card-stack" style:--accent={config.theme?.accent}>
 	<main
 		bind:this={cardEl}
 		class="card"
@@ -267,19 +338,14 @@
 		style:transform={`rotateX(${rotX}deg) rotateY(${rotY}deg)`}
 	>
 		{#if config.music && entered}
-			<div class="player-slot" class:player-slot-top={showCommentForm}>
+			<div class="player-slot" class:player-slot-top={bareLayout}>
 				<AudioPlayer config={config.music} {assetBase} {entered} />
 			</div>
 		{/if}
 
-		{#if showCommentForm}
-			<CommentForm
-				{pseudo}
-				onCancel={cancelCommentForm}
-				onSubmitted={onCommentSubmitted}
-				onAlreadyCommented={onAlreadyCommentedFromServer}
-			/>
-		{:else}
+		<!-- Collapse animé plutôt qu'un {#if} : le header disparaît hors « résumé »,
+		     et un simple démontage ferait sauter la carte sous le tilt 3D. -->
+		<div class="header-slot" class:collapsed={bareLayout} aria-hidden={bareLayout}>
 			<header class="pseudo-header">
 				{#if discordAvatarUrl || config.avatar}
 					<img
@@ -299,32 +365,52 @@
 					<span class="pseudo-text">{config.displayName ?? pseudo}</span>
 				</h1>
 			</header>
+		</div>
 
-			{@html html}
+		<!-- Rendu avant les panneaux dans le DOM (ordre de lecture / navigation
+		     clavier cohérent) mais placé visuellement en bas via `order`. -->
+		<div class="tabs-slot">
+			<CardTabs {tabs} active={activeTab} onSelect={(id) => selectTab(id as TabId)} />
+		</div>
 
-			{#if config.socials && config.socials.length > 0}
-				<SocialLinks socials={config.socials} />
-			{/if}
-		{/if}
+		<div class="panels" class:clamped={panelClamped} style:height={panelHeight === null ? null : `${panelHeight}px`}>
+			{#key activeTab}
+				<div
+					class="panel"
+					bind:this={panelEl}
+					role="tabpanel"
+					id={`panel-${activeTab}`}
+					aria-labelledby={`tab-${activeTab}`}
+					tabindex="-1"
+				>
+					{#if activeTab === 'summary'}
+						{@html html}
+						{#if config.socials && config.socials.length > 0}
+							<SocialLinks socials={config.socials} />
+						{/if}
+					{:else if activeTab === 'details'}
+						<div class="details">{@html detailsHtml}</div>
+					{:else}
+						{#if alreadyCommented}
+							<p class="comment-note">
+								{justSubmitted
+									? 'merci pour votre message'
+									: 'vous avez déjà laissé un message sur cette page'}
+							</p>
+						{:else}
+							<CommentForm
+								{pseudo}
+								onCancel={() => selectTab('summary')}
+								onSubmitted={onCommentSubmitted}
+								onAlreadyCommented={onAlreadyCommentedFromServer}
+							/>
+						{/if}
+					{/if}
+				</div>
+			{/key}
+		</div>
 	</main>
 </div>
-
-{#if !showCommentForm}
-	<button
-		type="button"
-		class="comment-btn"
-		class:entered
-		onclick={openCommentForm}
-		disabled={alreadyCommented}
-		title={alreadyCommented ? 'Vous avez déjà laissé un commentaire' : undefined}
-	>
-		{justSubmitted
-			? 'merci pour votre commentaire'
-			: alreadyCommented
-				? 'commentaire déjà laissé'
-				: 'laisser un commentaire'}
-	</button>
-{/if}
 
 {#if config.showViewCounter !== false}
 	<ViewCounter {pseudo} {entered} setApi={(api) => (counterApi = api)} />
@@ -375,17 +461,24 @@
 		align-items: center;
 		gap: 1.7rem;
 		width: 100%;
-		padding: 2.5rem 3rem;
+		/* Exposés en variables : la barre d'onglets s'en sert pour annuler le padding
+		   bas et venir se coller au bord de la carte. */
+		--card-pad-x: 3rem;
+		--card-pad-top: 2.5rem;
+		--card-pad-bottom: 2.5rem;
+		--card-radius: 1.75rem;
+		padding: var(--card-pad-top) var(--card-pad-x) var(--card-pad-bottom);
 		text-align: center;
 		background: rgba(0, 0, 0, 0.5);
 		backdrop-filter: blur(56px);
 		-webkit-backdrop-filter: blur(56px);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 1.75rem;
+		/* Sans liseré : la carte se détache du fond par son verre et ses ombres seules.
+		   (Le `0 0 0 1px` blanc de l'ancien box-shadow doublait le border — parti avec.) */
+		border: none;
+		border-radius: var(--card-radius);
 		box-shadow:
 			0 40px 100px rgba(0, 0, 0, 0.85),
-			0 15px 40px rgba(0, 0, 0, 0.6),
-			0 0 0 1px rgba(255, 255, 255, 0.05);
+			0 15px 40px rgba(0, 0, 0, 0.6);
 		/* Masqué tant qu'on est en mode "click to enter" ; fade-in 0.5s au clic. */
 		opacity: 0;
 		pointer-events: none;
@@ -403,9 +496,6 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 0 0.5rem 0 0;
-		/* S'ajoute au gap flex de la card (1.7rem) → la pillule respire un peu
-		   plus vis-à-vis du contenu en dessous. */
-		margin-bottom: 0.75rem;
 		border-radius: 999px;
 		background: rgba(0, 0, 0, 0.55);
 		backdrop-filter: blur(8px);
@@ -492,54 +582,114 @@
 		/* Pulse glow blanc (animation pseudo-pulse partagée avec l'effet glow). */
 		animation: pseudo-pulse 3.2s ease-in-out infinite;
 	}
-	/* Le player est rendu en 1er dans le DOM (pour qu'il ne se remount pas en
-	   mode commentaire), mais on contrôle sa position visuelle via `order`. */
+	/* Ordre visuel de la carte, découplé de l'ordre DOM : le player est rendu en 1er
+	   pour ne jamais se remount d'un onglet à l'autre, et la barre d'onglets est rendue
+	   avant les panneaux (ordre de tabulation cohérent) tout en s'affichant en bas. */
+	.header-slot { order: 1; }
+	.panels { order: 2; }
+	.player-slot { order: 3; }
+	.tabs-slot { order: 4; }
+
 	.player-slot {
 		width: 100%;
 		max-width: 38rem;
-		order: 99;
 	}
+	/* Hors « résumé » le header s'efface : le lecteur reprend la tête de la carte,
+	   comme dans la disposition du formulaire de commentaire d'origine. */
 	.player-slot-top {
-		order: -1;
+		order: 0;
 	}
-	.comment-btn {
-		display: block;
-		margin: 0.85rem auto 0;
-		padding: 0.3rem 0.8rem;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		border: 1px solid rgba(255, 255, 255, 0.18);
-		border-radius: 999px;
-		color: rgba(255, 255, 255, 0.8);
-		font: inherit;
-		font-size: 0.72rem;
-		letter-spacing: 0.02em;
-		cursor: pointer;
-		position: relative;
-		z-index: 2;
-		transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease, opacity 0.5s ease;
-		/* Masqué tant qu'on est en mode "click to enter" ; fade-in 0.5s au clic. */
+
+	/* Collapse du header via grid-template-rows 1fr → 0fr (la seule façon d'animer
+	   vers/depuis une hauteur `auto`). La marge négative absorbe le gap flex de la
+	   carte, qui subsisterait sinon en 1.7rem de vide. */
+	.header-slot {
+		display: grid;
+		grid-template-rows: 1fr;
+		justify-items: center;
+		width: 100%;
+		overflow: hidden;
+		/* S'ajoute au gap flex de la carte (1.7rem) → la pillule respire un peu
+		   plus vis-à-vis du contenu en dessous. */
+		margin-bottom: 0.75rem;
+		transition:
+			grid-template-rows 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+			margin-bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+			opacity 0.18s ease;
+	}
+	.header-slot > :global(*) {
+		min-height: 0;
+	}
+	.header-slot.collapsed {
+		grid-template-rows: 0fr;
+		margin-bottom: -1.7rem;
 		opacity: 0;
 		pointer-events: none;
 	}
-	.comment-btn.entered {
-		opacity: 1;
-		pointer-events: auto;
-	}
-	.comment-btn.entered:disabled {
-		opacity: 0.5;
-	}
-	.comment-btn:hover:not(:disabled) {
-		background: rgba(0, 0, 0, 0.55);
-		border-color: rgba(255, 255, 255, 0.3);
-		transform: translateY(-1px);
-	}
-	.comment-btn:disabled {
-		cursor: not-allowed;
+
+	/* Le bloc d'onglets est centré et dimensionné par son contenu ; seul le padding
+	   bas de la carte est annulé pour qu'il vienne s'asseoir sur le bord. */
+	.tabs-slot {
+		display: flex;
+		justify-content: center;
+		width: 100%;
+		margin-bottom: calc(-1 * var(--card-pad-bottom));
 	}
 
+	/* Conteneur à hauteur pilotée en JS : `height` en px + transition = pas de saut
+	   au changement d'onglet. Tant que la mesure n'a pas eu lieu (SSR, 1er paint),
+	   l'attribut height est absent → auto, donc pas de flash à 0. */
+	.panels {
+		position: relative;
+		width: 100%;
+		overflow: hidden;
+		transition: height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	/* Panneau plus haut que le viewport : on scrolle dedans plutôt que de laisser la
+	   carte déborder hors d'un body en overflow:hidden (= contenu inatteignable). */
+	.panels.clamped {
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+	}
+	.panel {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.7rem;
+		width: 100%;
+		animation: panel-in 0.28s ease both;
+	}
+	.panel:focus { outline: none; }
+	@keyframes panel-in {
+		from { opacity: 0; transform: translateY(4px); }
+		to { opacity: 1; transform: none; }
+	}
 
+	.comment-note {
+		margin: 0;
+		padding: 0.9rem 1.2rem;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 0.6rem;
+		background: rgba(255, 255, 255, 0.05);
+		color: rgba(255, 255, 255, 0.75);
+		font-size: 0.85rem;
+		font-style: italic;
+	}
+
+	/* Enveloppe du fragment details.html. Calquée sur le formulaire de commentaire
+	   (.form) : mêmes largeur, gouttière et alignement, pour que les deux onglets
+	   « pleine carte » aient la même assise. */
+	.details {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 1rem;
+		width: 100%;
+		max-width: 40rem;
+		margin: 0 auto;
+		text-align: left;
+	}
 	.origin-link {
 		position: fixed;
 		bottom: 0.8rem;
@@ -731,6 +881,74 @@
 		transform: translateY(-1px);
 	}
 
+	/* ===== Conventions de l'onglet « Détails » (users/[pseudo]/details.html) =====
+	   Même logique que les styles ci-dessus : des défauts corrects pour les classes
+	   usuelles, surchargeables via style.css. */
+	/* Une <section> = un champ du formulaire : un libellé discret, puis le contenu
+	   dans le même encadré de verre sombre que <textarea> / <input>. */
+	:global(.card .details section) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	:global(.card .details h2) {
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 400;
+		letter-spacing: 0.01em;
+		color: rgba(255, 255, 255, 0.85);
+	}
+	/* Tout ce qui n'est pas le libellé forme le corps encadré de la section. */
+	:global(.card .details section > :not(h2)) {
+		padding: 0.7rem 0.85rem;
+		background: rgba(0, 0, 0, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 0.55rem;
+	}
+	:global(.card .details p) {
+		text-align: left;
+	}
+	/* Centres d'intérêt : rangée de pastilles. */
+	:global(.card .tags) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	:global(.card .tags li) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.7rem;
+		border: 1px solid rgba(255, 255, 255, 0.14);
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.06);
+		font-size: 0.8rem;
+		color: rgba(255, 255, 255, 0.85);
+	}
+	:global(.card .tags li img) {
+		width: 1rem;
+		height: 1rem;
+		object-fit: contain;
+	}
+	/* Infos clés : <dl> en deux colonnes, label discret / valeur lisible. */
+	:global(.card .facts) {
+		display: grid;
+		grid-template-columns: minmax(6rem, auto) 1fr;
+		gap: 0.4rem 1.2rem;
+		margin: 0;
+		font-size: 0.9rem;
+	}
+	:global(.card .facts dt) {
+		color: rgba(255, 255, 255, 0.45);
+	}
+	:global(.card .facts dd) {
+		margin: 0;
+		color: rgba(255, 255, 255, 0.9);
+	}
+
 	/* ===== Mobile / petits viewports =====
 	   - Cache le <br /> au milieu de la quote (rendu bizarre sur écran étroit).
 	   - Allège les effets visuels coûteux (backdrop-filter, animations de shadow)
@@ -744,14 +962,16 @@
 			-webkit-backdrop-filter: blur(20px);
 			max-width: 800px;
 			will-change: auto;
-			padding-left: 1rem;
-			padding-right: 1rem;
-			padding-top: 2rem;
-			padding-bottom: 1rem;
+			--card-pad-x: 1rem;
+			--card-pad-top: 2rem;
+			--card-pad-bottom: 1rem;
 		}
 		.pseudo,
 		.pseudo .pseudo-text { animation: none; }
 		:global(.card .social-link img) { animation: none; }
+
+		.panel { gap: 1.2rem; }
+		.details { max-width: 100%; }
 
 		/* Le lien "vidéo d'origine" n'a plus de sens : à ≤1000px on bascule sur
 		   l'image figée (cf. Background.svelte), il n'y a plus de vidéo à pointer. */
@@ -764,5 +984,8 @@
 		.pseudo .pseudo-text { animation: none; }
 		:global(.card .social-link img) { animation: none; }
 		.card { transition: none; }
+		.panels { transition: none; }
+		.panel { animation: none; }
+		.header-slot { transition: none; }
 	}
 </style>

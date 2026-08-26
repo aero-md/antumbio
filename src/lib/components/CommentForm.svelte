@@ -48,7 +48,7 @@
 				onAlreadyCommented();
 				return;
 			}
-			errorMsg = 'Impossible d’envoyer le commentaire.';
+			errorMsg = 'Impossible d’envoyer le message.';
 		} catch {
 			errorMsg = 'Erreur réseau.';
 		} finally {
@@ -60,7 +60,7 @@
 <div class="form">
 	<label class="field">
 		<span class="label-row">
-			<span>Votre commentaire</span>
+			<span>Votre message</span>
 			<span class="counter" class:over={content.length > MAX_CONTENT}>
 				{content.length}/{MAX_CONTENT}
 			</span>
@@ -69,7 +69,7 @@
 			class="content"
 			rows="8"
 			maxlength={MAX_CONTENT}
-			placeholder="Écrivez votre commentaire…"
+			placeholder="Écrivez votre message…"
 			bind:value={content}
 			disabled={submitting}
 		></textarea>
