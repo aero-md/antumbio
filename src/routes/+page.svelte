@@ -16,6 +16,10 @@
 		return () => document.documentElement.classList.remove('is-home');
 	});
 
+	const ORIGIN = 'https://bio.suns.red';
+	const DESCRIPTION =
+		"Pages de profil personnalisées : avatar, ambiance sonore et visuelle, liens sociaux, messages anonymes. Une page par pseudo, auto-hébergée ou sur demande.";
+
 	// Braises générées de manière déterministe (pas d'aléa pour rester stable en SSR).
 	// Chaque braise part du bas, dérive lentement vers le haut avec une légère bascule
 	// horizontale + un changement de taille. Volontairement asymétrique pour casser
@@ -40,6 +44,22 @@
 
 <svelte:head>
 	<title>redsunsbio</title>
+	<meta name="description" content={DESCRIPTION} />
+
+	<!-- Uniquement sur la home : une page /[pseudo] appartient à son titulaire,
+	     pas au site, et n'a pas à s'afficher sous la bannière bio.suns.red quand
+	     son lien est déplié. Pas d'image : juste le titre et la description. -->
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="bio.suns.red" />
+	<meta property="og:title" content="bio.suns.red" />
+	<meta property="og:description" content={DESCRIPTION} />
+	<meta property="og:url" content={ORIGIN} />
+	<meta property="og:locale" content="fr_FR" />
+
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="bio.suns.red" />
+	<meta name="twitter:description" content={DESCRIPTION} />
+
 	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </svelte:head>
 
