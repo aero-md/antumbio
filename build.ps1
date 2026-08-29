@@ -1,4 +1,4 @@
-# redsunsbio - Build & Run Script
+# Antumbio - Build & Run Script
 # SvelteKit fullstack (adapter-node)
 
 param(
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-Write-Host "redsunsbio Build Script" -ForegroundColor Cyan
+Write-Host "Antumbio Build Script" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Install deps si node_modules absent

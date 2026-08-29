@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Soleil rouge à moitié couché sous l'horizon">
+  <!--
+    PP par défaut du template : le fond « horizon » de la page, réduit à un disque.
+    Même palette que HorizonBackground.svelte (#12030a → #7e1626, soleil #ff0028),
+    pour que la pillule d'en-tête se lise comme une découpe du décor derrière elle.
+    Contraintes de lecture : la vignette fait 64 px dans le header (4rem), donc une
+    unité du viewBox ≈ 0,4 px. Tout est dimensionné pour ça — soleil énorme (r=36,
+    presque la moitié du disque), trait d'horizon à 2,6 u (~1 px), et la moitié
+    basse du soleil assombrie par le « sol » pour donner l'astre à demi couché.
+    Rien de plus fin que 2 u : en dessous, l'antialiasing dissout le trait.
+    La couleur dominante de cette image peut teinter le pseudo (extraction côté
+    client, cf. [pseudo]/+page.svelte) — le rouge du disque gagne le vote. Le
+    template la coupe (`nicknameTint: false`) pour garder un pseudo blanc plein.
+  -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1b0510" />
+      <stop offset="30%" stop-color="#3a0c1b" />
+      <stop offset="52%" stop-color="#6d1425" />
+      <stop offset="61%" stop-color="#8d1a2b" />
+      <stop offset="66%" stop-color="#2a0812" />
+      <stop offset="100%" stop-color="#0e030a" />
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0%" stop-color="#ff5566" stop-opacity="0.9" />
+      <stop offset="34%" stop-color="#ff1032" stop-opacity="0.42" />
+      <stop offset="100%" stop-color="#ff0028" stop-opacity="0" />
+    </radialGradient>
+    <!-- Aplat volontaire à partir de 40 % : la dominante de la PP est votée par
+         bucket de couleur (cf. [pseudo]/+page.svelte), et un dégradé continu
+         éparpille ses pixels sur des dizaines de buckets — c'est le ciel qui
+         gagnait alors le vote, avec un rouge quasi noir. Une plage franche de
+         #ff2438 rafle la mise et teinte le pseudo d'un rouge net. -->
+    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd2d6" />
+      <stop offset="22%" stop-color="#ff6b78" />
+      <stop offset="40%" stop-color="#ff2438" />
+      <stop offset="100%" stop-color="#ff2438" />
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffc2cc" stop-opacity="0" />
+      <stop offset="18%" stop-color="#ffb4c3" stop-opacity="0.6" />
+      <stop offset="50%" stop-color="#fff6f7" stop-opacity="1" />
+      <stop offset="82%" stop-color="#ffb4c3" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#ffc2cc" stop-opacity="0" />
+    </linearGradient>
+    <!-- Le disque entier est clippé : l'image reste correcte même sans
+         border-radius côté CSS (aperçus, partage, favicon de secours). -->
+    <clipPath id="round"><circle cx="80" cy="80" r="80" /></clipPath>
+  </defs>
+
+  <style>
+    /* Animées quand le SVG est rendu en &lt;img&gt; (Chrome/Firefox le font) ;
+       ailleurs on retombe sur la première frame, qui est déjà l'état nominal. */
+    .halo { transform-box: fill-box; transform-origin: center; animation: breathe 9s ease-in-out infinite; }
+    .ember { animation: twinkle 5s ease-in-out infinite; }
+    .ember:nth-of-type(2) { animation-delay: -2.5s; }
+    @keyframes breathe { 0%, 100% { opacity: 0.88; transform: scale(1); } 50% { opacity: 1; transform: scale(1.07); } }
+    @keyframes twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.85; } }
+    @media (prefers-reduced-motion: reduce) {
+      .halo, .ember { animation: none; }
+    }
+  </style>
+
+  <g clip-path="url(#round)">
+    <rect width="160" height="160" fill="url(#sky)" />
+    <circle class="halo" cx="80" cy="98" r="72" fill="url(#glow)" />
+    <circle cx="80" cy="98" r="36" fill="url(#disc)" />
+
+    <g fill="#ff8a94">
+      <circle class="ember" cx="36" cy="60" r="3" />
+      <circle class="ember" cx="124" cy="46" r="2.4" />
+    </g>
+
+    <!-- Sol : voile sombre sur tout ce qui passe sous la ligne. C'est lui qui coupe
+         le soleil en deux et donne la lecture « couchant » plutôt que « point rouge ». -->
+    <rect x="0" y="98" width="160" height="62" fill="#0e030a" opacity="0.66" />
+    <rect x="0" y="96.7" width="160" height="2.6" fill="url(#line)" />
+
+    <!-- Liseré intérieur : détache la PP du verre de la pillule sans border CSS. -->
+    <circle cx="80" cy="80" r="79" fill="none" stroke="#000" stroke-opacity="0.4" stroke-width="2" />
+  </g>
+</svg>

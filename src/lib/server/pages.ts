@@ -31,7 +31,7 @@ export async function readUserHtml(pseudo: string): Promise<string> {
 
 // Contenu de l'onglet « Détails ». Optionnel : sans contenu, la page n'affiche
 // pas l'onglet du tout. Un fichier réduit à ses commentaires — le cas du template
-// `_example` recopié puis vidé de ses sections — compte comme absent : il ne rend
+// `home` recopié puis vidé de ses sections — compte comme absent : il ne rend
 // rien à l'écran, un onglet vide serait une impasse.
 export async function readUserDetailsHtml(pseudo: string): Promise<string> {
 	const raw = await readFragment(pseudo, 'details.html');

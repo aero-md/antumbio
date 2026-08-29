@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { BackgroundConfig } from '$lib/types';
 	import { resolveAsset } from '$lib/path';
+	import HorizonBackground from './HorizonBackground.svelte';
 
 	interface Props {
 		config: BackgroundConfig | undefined;
@@ -24,14 +25,16 @@
 		return () => mq.removeEventListener('change', onChange);
 	});
 
+	// `color` et `horizon` n'ont pas d'asset à résoudre : le premier est une couleur
+	// plate, le second une scène CSS auto-suffisante.
 	const resolved = $derived.by(() => {
 		if (!config) return null;
-		if (config.type === 'color') return { ...config };
+		if (config.type === 'color' || config.type === 'horizon') return { ...config };
 		return { ...config, src: resolveAsset(assetBase, config.src) };
 	});
 
 	const mobileStaticSrc = $derived.by(() => {
-		if (!config || config.type === 'color') return null;
+		if (!config || config.type === 'color' || config.type === 'horizon') return null;
 		if (!config.mobileSrc) return null;
 		return resolveAsset(assetBase, config.mobileSrc);
 	});
@@ -48,6 +51,11 @@
 		{/if}
 	{:else if resolved.type === 'color'}
 		<div class="bg" style:background-color={resolved.color}></div>
+	{:else if resolved.type === 'horizon'}
+		<HorizonBackground />
+		{#if resolved.dim}
+			<div class="dim" style:opacity={resolved.dim}></div>
+		{/if}
 	{:else if resolved.type === 'image'}
 		<div
 			class="bg"

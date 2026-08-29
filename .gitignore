@@ -12,6 +12,7 @@ deploy.ps1
 
 # ===== Pages utilisateurs =====
 # On ne versionne PAS le contenu réel des pages (vie privée + médias lourds).
-# Seul le template `users/_example/` est committé, pour montrer la structure.
+# Seule la page `users/home/` est committée : c'est la vitrine (cible du redirect
+# depuis `/`) et le template dont on part pour créer une page.
 users/*
-!users/_example/
+!users/home/

@@ -57,6 +57,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress, cookies 
 
 	const config = await readUserConfig(pseudo);
 	if (!config) throw error(404, 'Page not found');
+	// L'onglet « contact » retiré côté page (`showContact: false`) ferme aussi la
+	// porte côté serveur — sinon l'endpoint reste ouvert à qui connaît le pseudo.
+	if (config.showContact === false) throw error(403, 'Messages disabled for this page');
 
 	// Identité autoritaire = cookie httpOnly opaque + IP (HMAC), jamais le body.
 	const vid = ensureVisitorId(cookies);

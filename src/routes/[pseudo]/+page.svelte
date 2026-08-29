@@ -48,7 +48,63 @@
 	// (qui mixe bleu + skintone → mauve/bordeau sur la plupart des PP).
 	let pseudoColor = $state<string | null>(null);
 
+	// La dominante sert de bas de dégradé au pseudo (blanc → dominante). Une PP
+	// nocturne — un couchant sombre, une photo de nuit — sort un rouge quasi noir
+	// (mesuré : rgb(43, 9, 21)) et le bas des lettres devient illisible sur le verre.
+	// On borne donc l'intensité au lieu de rejeter la couleur : la teinte du user est
+	// conservée, seules sa saturation et sa luminosité sont ramenées dans une fenêtre
+	// lisible. Passage par HSL parce que c'est là que « teinte » et « intensité » se
+	// séparent proprement.
+	const MIN_SAT = 0.5;
+	const MIN_LUM = 0.58;
+	const MAX_LUM = 0.76;
+
+	function readableTint(r: number, g: number, b: number): string {
+		const rn = r / 255;
+		const gn = g / 255;
+		const bn = b / 255;
+		const max = Math.max(rn, gn, bn);
+		const min = Math.min(rn, gn, bn);
+		const l = (max + min) / 2;
+		const d = max - min;
+
+		let h = 0;
+		if (d !== 0) {
+			if (max === rn) h = ((gn - bn) / d) % 6;
+			else if (max === gn) h = (bn - rn) / d + 2;
+			else h = (rn - gn) / d + 4;
+			h *= 60;
+			if (h < 0) h += 360;
+		}
+		const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+
+		const s2 = Math.max(MIN_SAT, Math.min(1, s));
+		const l2 = Math.max(MIN_LUM, Math.min(MAX_LUM, l));
+
+		// HSL → RGB (formule par chroma/segment de teinte).
+		const c = (1 - Math.abs(2 * l2 - 1)) * s2;
+		const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+		const m = l2 - c / 2;
+		const seg = Math.floor(h / 60) % 6;
+		const [r1, g1, b1] = [
+			[c, x, 0],
+			[x, c, 0],
+			[0, c, x],
+			[0, x, c],
+			[x, 0, c],
+			[c, 0, x]
+		][seg];
+		const to255 = (v: number) => Math.round((v + m) * 255);
+		return `rgb(${to255(r1)}, ${to255(g1)}, ${to255(b1)})`;
+	}
+
 	$effect(() => {
+		// `nicknameTint: false` : on n'extrait rien, `--pseudo-accent` reste absent et
+		// le dégradé retombe sur son fallback blanc → pseudo blanc plein.
+		if (config.nicknameTint === false) {
+			pseudoColor = null;
+			return;
+		}
 		const src = discordAvatarUrl ?? (config.avatar ? resolveAsset(assetBase, config.avatar) : null);
 		if (!src) return;
 
@@ -81,7 +137,7 @@
 				const max = Math.max(r, g, b);
 				const min = Math.min(r, g, b);
 				if (max - min < 25) continue; // quasi-gris : parasites
-				if (max < 40) continue;       // trop sombre
+				if (max < 70) continue;       // trop sombre pour porter une teinte lisible
 				if (min > 230) continue;      // trop clair
 				const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
 				const e = buckets.get(key);
@@ -103,7 +159,7 @@
 			const r = Math.round(best.r / best.count);
 			const g = Math.round(best.g / best.count);
 			const b = Math.round(best.b / best.count);
-			pseudoColor = `rgb(${r}, ${g}, ${b})`;
+			pseudoColor = readableTint(r, g, b);
 		};
 		img.src = src;
 		return () => {
@@ -198,7 +254,10 @@
 	// `untrack` : valeur initiale uniquement ; l'$effect ci-dessous gère les mises à jour.
 	let animatedTitle = $state(untrack(() => pseudo));
 	$effect(() => {
-		const base = config.displayName ?? pseudo;
+		// `tabTitle` d'abord : le nom affiché dans la carte et le titre de l'onglet
+		// ne servent pas le même but — l'un signe la page, l'autre doit rester
+		// reconnaissable dans une barre d'onglets encombrée.
+		const base = config.tabTitle ?? config.displayName ?? pseudo;
 		animatedTitle = base;
 
 		if (config.titleAnimation !== 'blink-cursor') return;
@@ -225,6 +284,8 @@
 
 	// ===== Onglets de la carte =====
 	// « Détails » n'existe que si le user a posé un details.html non vide.
+	// « Contact » est là par défaut ; `showContact: false` le retire (l'API de
+	// messages refuse alors la page aussi, pas juste l'onglet).
 	type TabId = 'summary' | 'details' | 'comments';
 	let activeTab = $state<TabId>('summary');
 	const tabs = $derived<Tab[]>([
@@ -232,7 +293,7 @@
 		...(detailsHtml.trim() ? [{ id: 'details', label: 'détails' }] : []),
 		// L'id reste `comments` : c'est le formulaire de commentaire derrière, seul le
 		// libellé change.
-		{ id: 'comments', label: 'contact' }
+		...(config.showContact === false ? [] : [{ id: 'comments', label: 'contact' }])
 	]);
 	// Garde-fou si le details.html disparaît d'un load à l'autre (navigation client).
 	$effect(() => {
@@ -357,6 +418,7 @@
 				<h1
 					class="pseudo"
 					data-effect={config.nicknameEffect ?? 'glow'}
+					data-title-font={config.theme?.titleFont ?? 'cormorant'}
 					style:--pseudo-accent={pseudoColor}
 				>
 					{#if (config.nicknameEffect ?? 'glow') === 'cast-shadow'}
@@ -416,7 +478,8 @@
 	<ViewCounter {pseudo} {entered} setApi={(api) => (counterApi = api)} />
 {/if}
 
-{#if config.background && config.background.type !== 'color' && config.background.sourceUrl}
+<!-- Seuls les fonds à média (image/vidéo) peuvent créditer une source. -->
+{#if config.background && (config.background.type === 'image' || config.background.type === 'video') && config.background.sourceUrl}
 	<a
 		class="origin-link"
 		href={config.background.sourceUrl}
@@ -519,22 +582,79 @@
 		flex-shrink: 0;
 	}
 	/* Pseudo : base commune. Les effets visuels (glow / cast-shadow) sont scopés
-	   par [data-effect]. line-height 0.70 resserre le line-box sur les glyphes
-	   → le texte apparaît centré verticalement dans la pillule. */
+	   par [data-effect].
+	   line-height : ne pas descendre sous 1.1. L'effet `glow` peint le texte via
+	   `background-clip: text` + fill transparent — le dégradé est donc borné à la
+	   BOÎTE de l'élément, et tout glyphe qui en dépasse ne reçoit aucune couleur.
+	   Avec un 0.70 le line-box tombait sous le corps du texte : les jambages
+	   (le « p » de `example`) tombaient hors boîte et disparaissaient purement et
+	   simplement. À 1.15 les descendantes rentrent. La hauteur de
+	   la pillule ne bouge pas pour autant : c'est l'avatar (4rem) qui l'impose. */
 	.pseudo {
 		position: relative;
 		z-index: 3;
 		margin: 0 1.5rem;
 		padding: 0;
+		/* Cormorant Garamond reste le défaut de toutes les pages. `theme.titleFont`
+		   (config.json) bascule sur un des presets [data-title-font] plus bas — corps
+		   et interlettrage voyagent avec la famille, une display n'a pas la même
+		   x-height qu'un serif et ne se règle pas pareil. */
 		font-family: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
 		font-weight: 400;
 		font-size: 2.5rem;
-		line-height: 0.70;
+		line-height: 1.15;
 		letter-spacing: 0.01em;
 		color: white;
 		/* Décale visuellement vers le haut pour compenser le typographic offset
 		   des x-height letters (Cormorant baseline + leading résiduel). */
-		transform: translateY(-0.08em);
+		transform: translateY(-0.02em);
+	}
+	/* Presets de police du pseudo, choisis par page via `theme.titleFont`. Chacun
+	   embarque ses propres métriques : à corps égal une display moderne pèse bien
+	   plus lourd qu'un Cormorant, et laisser le 2.5rem du serif fait déborder la
+	   pillule. Le translateY du défaut est annulé — il compense une baseline qui
+	   n'est celle d'aucune de ces familles. Toute valeur ajoutée ici doit aussi
+	   être chargée dans src/app.html et déclarée dans TitleFont (src/lib/types.ts). */
+	.pseudo[data-title-font='bricolage'] {
+		font-family: 'Bricolage Grotesque', 'Space Grotesk', system-ui, sans-serif;
+		font-weight: 600;
+		font-size: 2.05rem;
+		letter-spacing: -0.02em;
+		transform: none;
+	}
+	.pseudo[data-title-font='gloock'] {
+		font-family: 'Gloock', 'Cormorant Garamond', Georgia, serif;
+		font-weight: 400;
+		font-size: 2.3rem;
+		letter-spacing: 0;
+		transform: none;
+	}
+	/* Sixtyfour : bitmap CRT, de très loin la plus encombrante du lot — glyphes larges,
+	   chasse fixe et gouttières déjà dessinées dans la fonte. D'où le corps très bas
+	   (1.5rem) et le tracking à zéro : y ajouter de l'espace disloque le mot. */
+	.pseudo[data-title-font='sixtyfour'] {
+		font-family: 'Sixtyfour', 'Syne Mono', ui-monospace, monospace;
+		font-weight: 400;
+		font-size: 1.5rem;
+		letter-spacing: 0;
+		transform: none;
+	}
+	/* Syne Mono : une seule graisse (400), ne pas demander de bold — le navigateur le
+	   synthétiserait et l'épaississement baverait sous la glow. Chasse fixe, donc un
+	   pseudo un peu long s'étale vite : corps tenu bas et tracking resserré. */
+	.pseudo[data-title-font='syne-mono'] {
+		font-family: 'Syne Mono', 'Space Grotesk', ui-monospace, monospace;
+		font-weight: 400;
+		font-size: 2rem;
+		letter-spacing: -0.02em;
+		transform: none;
+	}
+	.pseudo[data-title-font='anybody'] {
+		font-family: 'Anybody', 'Space Grotesk', system-ui, sans-serif;
+		font-weight: 600;
+		font-size: 2.1rem;
+		letter-spacing: -0.01em;
+		transform: none;
 	}
 	.pseudo-text {
 		display: inline-block;
@@ -581,6 +701,56 @@
 	.pseudo[data-effect='cast-shadow'] .pseudo-text {
 		/* Pulse glow blanc (animation pseudo-pulse partagée avec l'effet glow). */
 		animation: pseudo-pulse 3.2s ease-in-out infinite;
+	}
+	/* Broken-neon : tube au néon qui déconne. Contrairement à `glow`, le texte garde
+	   une vraie couleur (pas de background-clip) — le halo est peint uniquement par
+	   text-shadow, ce qui survit à n'importe quelle fonte, bitmap comprise.
+	   L'état ALLUMÉ est celui de la règle de base, les keyframes ne font que le couper :
+	   quand les animations sautent (reduced-motion, mobile) le néon reste allumé au
+	   lieu de se figer sur un état éteint au hasard.
+	   La teinte suit --pseudo-accent comme les autres effets : `nicknameTint: false`
+	   → halo blanc, sinon néon à la couleur dominante de la PP. */
+	.pseudo[data-effect='broken-neon'] {
+		color: #fff;
+		text-shadow:
+			0 0 4px rgba(255, 255, 255, 0.95),
+			0 0 11px var(--pseudo-accent, rgba(255, 255, 255, 0.85)),
+			0 0 26px var(--pseudo-accent, rgba(255, 255, 255, 0.45)),
+			0 2px 4px rgba(0, 0, 0, 0.7);
+		animation: neon-break 8.5s linear infinite;
+	}
+	/* Deux périodes volontairement non harmoniques (8.5s et 13.7s) : la coupure sèche
+	   et la baisse de régime se recroisent toutes les ~2 min au lieu de boucler à vue.
+	   Ce qui règle le ressenti n'est pas le nombre de coupures mais la longueur des
+	   silences : ici un bégaiement serré (deux cuts à 0,3s d'écart) puis des trous de
+	   2 à 3s. Tout resserrer donne un stroboscope, tout étaler donne un bug rare.
+	   Les fronts restent raides (paires de keyframes à ~0.2%, ≈17ms) et les coupures
+	   durent 50 à 95ms : c'est cette durée-là qui se lit « tube qui lâche ». */
+	.pseudo[data-effect='broken-neon'] .pseudo-text {
+		animation: neon-sag 13.7s ease-in-out infinite;
+	}
+	@keyframes neon-break {
+		0%, 8.8%, 9.9%, 12.6%, 13.6%, 44.8%, 46.3%, 71.8%, 72.8%, 100% {
+			text-shadow:
+				0 0 4px rgba(255, 255, 255, 0.95),
+				0 0 11px var(--pseudo-accent, rgba(255, 255, 255, 0.85)),
+				0 0 26px var(--pseudo-accent, rgba(255, 255, 255, 0.45)),
+				0 2px 4px rgba(0, 0, 0, 0.7);
+			opacity: 1;
+		}
+		/* Tube coupé : plus de halo, le verre reste juste visible sur le fond.
+		   Bégaiement à 9% + 12.8% (0,3s d'écart), silence de 2,7s, coupure longue à 45%,
+		   puis une dernière à 72% — l'irrégularité vient de l'écart entre les groupes. */
+		9%, 9.7%, 12.8%, 13.4%, 45%, 46.1%, 72%, 72.6% {
+			text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+			opacity: 0.34;
+		}
+	}
+	@keyframes neon-sag {
+		0%, 100% { opacity: 1; }
+		37% { opacity: 0.88; }
+		68% { opacity: 0.97; }
+		81% { opacity: 0.82; }
 	}
 	/* Ordre visuel de la carte, découplé de l'ordre DOM : le player est rendu en 1er
 	   pour ne jamais se remount d'un onglet à l'autre, et la barre d'onglets est rendue
@@ -898,11 +1068,11 @@
 		letter-spacing: 0.01em;
 		color: rgba(255, 255, 255, 0.85);
 	}
-	/* Tout ce qui n'est pas le libellé forme le corps encadré de la section. */
+	/* Tout ce qui n'est pas le libellé forme le corps de la section. Sans liseré :
+	   le fond sombre suffit à le détacher du verre de la carte. */
 	:global(.card .details section > :not(h2)) {
 		padding: 0.7rem 0.85rem;
 		background: rgba(0, 0, 0, 0.45);
-		border: 1px solid rgba(255, 255, 255, 0.18);
 		border-radius: 0.55rem;
 	}
 	:global(.card .details p) {

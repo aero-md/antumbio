@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "redsunsbio",
+      "name": "antumbio",
       "dependencies": {
         "@fingerprintjs/fingerprintjs": "^4.5.1",
         "pg": "^8.13.1",

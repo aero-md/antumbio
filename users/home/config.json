@@ -1,0 +1,22 @@
+{
+	"displayName": "Antumbio",
+	"tabTitle": "home",
+	"titleAnimation": "blink-cursor",
+	"avatar": "assets/avatar.svg",
+	"background": { "type": "horizon" },
+	"theme": { "accent": "#ff2040", "titleFont": "sixtyfour" },
+	"nicknameEffect": "broken-neon",
+	"nicknameTint": false,
+	"landing": { "enabled": true, "text": "click to enter" },
+	"socials": [
+		{ "name": "github", "url": "https://github.com/" },
+		{ "name": "discord", "copy": "example" },
+		{ "name": "youtube", "url": "https://www.youtube.com/" },
+		{ "name": "twitch", "url": "https://www.twitch.tv/" },
+		{ "name": "steam", "url": "https://store.steampowered.com/" },
+		{ "name": "spotify", "url": "https://open.spotify.com/" }
+	],
+	"customCss": false,
+	"customJs": false,
+	"showViewCounter": true
+}

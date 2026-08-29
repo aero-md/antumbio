@@ -1,4 +1,10 @@
-# redsunsbio
+# Antumbio
+
+> *Antumbra* : la zone d'où l'on voit une éclipse annulaire — un anneau de lumière
+> autour du disque sombre. Le nom du projet en est la contraction avec « bio ».
+>
+> Il ne désigne que le projet : le dossier, le domaine, la base et l'unité systemd
+> restent sous `redsunsbio`. Ne pas « harmoniser » sans migrer l'infra derrière.
 
 Site avec une landing page custom par utilisateur, accessible via `/[pseudo]`. Chaque page partage une structure de base (avatar, bio, liens, musique de fond, fond image/vidéo) mais peut surcharger CSS/JS spécifiques. Compteur de vues uniques par page, dédupliqué par identité serveur (cookie `rsb_vid` + HMAC), fenêtre glissante de 2 heures.
 
@@ -38,7 +44,6 @@ CREATE DATABASE redsunsbio_test;
 |---|---|
 | `DATABASE_URL` | Chaîne de connexion PostgreSQL |
 | `VISITOR_SECRET` | Secret serveur du HMAC d'identité visiteur. **Obligatoire** — l'app refuse de servir `/api/stats` sans. Générer un secret fort, unique par environnement, jamais commité. |
-| `DEFAULT_PSEUDO` | (optionnel) pseudo cible du redirect depuis `/` |
 | `DISCORD_BOT_TOKEN` | (optionnel) token d'une app Discord dédiée — active la résolution de la PP Discord pour les users opt-in (cf. section *PP Discord dynamique*). Absent = feature désactivée, un seul `warn` au premier hit. |
 | `ADDRESS_HEADER`, `XFF_DEPTH`, … | (prod derrière proxy) cf. doc adapter-node pour que `getClientAddress()` voie la vraie IP |
 
@@ -59,11 +64,13 @@ users/[pseudo]/
     └── music.mp3
 ```
 
-> **Versionnement** : le contenu réel de `users/` n'est **pas** committé (vie privée + médias lourds) — cf. `.gitignore`. Seul le template **`users/_example/`** est dans le repo pour montrer la structure. Pour démarrer : copiez `users/_example/` vers `users/<pseudo>/` et personnalisez.
+> **Versionnement** : le contenu réel de `users/` n'est **pas** committé (vie privée + médias lourds) — cf. `.gitignore`. Seule **`users/home/`** est dans le repo : c'est à la fois la vitrine (cible du redirect depuis `/`) et le template qui montre la structure. Pour démarrer : copiez `users/home/` vers `users/<pseudo>/` et personnalisez.
 
 Un avatar statique (`config.avatar`) accepte `png` / `jpg` / `webp` / `gif` — un GIF animé s'anime tel quel, la route d'assets le sert en `image/gif`.
 
-**`config.json`** ne gère que l'infrastructure (fond, audio, landing, theme, view counter, displayName pour le `<title>`). Schéma dans `src/lib/types.ts` (interface `PageConfig`). Exemple complet : `users/_example/config.json`.
+**`config.json`** ne gère que l'infrastructure (fond, audio, landing, theme, view counter, `displayName` pour le nom affiché — repris dans le `<title>` sauf si `tabTitle` le surcharge). Schéma dans `src/lib/types.ts` (interface `PageConfig`). Exemple complet : `users/home/config.json`.
+
+Fonds disponibles (`background.type`) : `color`, `image`, `video`, et `horizon` — une scène animée intégrée (ciel dégradé, soleil rouge, braises, cf. `src/lib/components/HorizonBackground.svelte`), sans aucun asset à fournir.
 
 **`index.html`** est un fragment HTML libre injecté dans le `<main class="card">`. Le music player est auto-ajouté en bas du container si `config.music` est défini. Styles par défaut disponibles pour les conventions usuelles : `h1`, `p`, `.avatar`, `.links a` (cf. `src/routes/[pseudo]/+page.svelte`). Le user peut tout overrider via `style.css` (`customCss: true`).
 
@@ -75,11 +82,13 @@ La carte a une barre d'onglets collée à son bord inférieur, à l'intérieur. 
 |---|---|---|
 | **résumé** (défaut) | `index.html` + la rangée de liens sociaux | toujours |
 | **détails** | `details.html` | `details.html` a du contenu réel |
-| **contact** | formulaire de message (ou l'état *déjà envoyé*) | toujours |
+| **contact** | formulaire de message (ou l'état *déjà envoyé*) | `showContact` ≠ `false` |
+
+`showContact: false` retire l'onglet **et** fait répondre `403` à `POST /api/comments` pour cette page — masquer l'onglet seul laisserait l'endpoint ouvert à qui connaît le pseudo.
 
 Hors « résumé », la carte reprend la disposition du formulaire d'origine : le header (PP + pseudo) se replie et le lecteur audio remonte en tête. Le lecteur n'est jamais démonté au changement d'onglet — il est rendu en premier dans le DOM et repositionné en CSS via `order`, sinon la musique se couperait.
 
-« A du contenu réel » = une fois les commentaires HTML et les blancs retirés, il reste quelque chose (`hasRenderableContent`, `src/lib/server/pages.ts`). Un `_example/details.html` recopié puis vidé de ses sections ne crée donc pas d'onglet mort.
+« A du contenu réel » = une fois les commentaires HTML et les blancs retirés, il reste quelque chose (`hasRenderableContent`, `src/lib/server/pages.ts`). Un `home/details.html` recopié puis vidé de ses sections ne crée donc pas d'onglet mort.
 
 **`details.html`** est un second fragment HTML libre, mêmes règles que `index.html` (édition manuelle, rendu via `{@html}`, **non sanitisé**). Il est enveloppé dans un bloc aligné à gauche, calqué sur le formulaire de contact : chaque `<section>` se lit comme un champ, libellé au-dessus, corps encadré.
 
@@ -91,7 +100,7 @@ Hors « résumé », la carte reprend la disposition du formulaire d'origine : l
 | `<ul class="tags">` | Rangée de pastilles (centres d'intérêt) ; un `<img>` dans un `<li>` devient une icône 1rem |
 | `<dl class="facts">` | Grille deux colonnes label / valeur (infos clés) |
 
-Exemple complet : `users/_example/details.html`. Tout est surchargeable via `style.css`.
+Exemple complet : `users/home/details.html`. Tout est surchargeable via `style.css`.
 
 Les assets sont servis par la route `/u/[pseudo]/[...path]` avec support `Range` (anti path-traversal lexical + `realpath`, MIME, 206 Partial Content pour audio/vidéo). Référence dans `index.html` : `<img src="/u/katemct/assets/avatar.png" />`, ou chemin relatif depuis `config.json` (résolution via `resolveAsset`). Un chemin absolu permet de pointer vers les assets d'une autre page.
 
@@ -167,7 +176,7 @@ Points clés :
 
 | Route | Description |
 |---|---|
-| `/` | Page d'accueil : présentation du projet + lien GitHub |
+| `/` | Pas de page d'accueil propre : redirige (307) vers `/home`, la page vitrine — même cible dans tous les environnements |
 | `/[pseudo]` | Page utilisateur (404 si pseudo inconnu) |
 | `/u/[pseudo]/[...path]` | Assets du user (CSS, JS, images, audio, vidéo) |
 | `POST /api/stats` | Enregistre une vue et renvoie les stats : `{pseudo, visitorId?}` → `{count, commentCount}`. `visitorId` = fingerprint optionnel (signal secondaire) ; l'identité réelle vient du cookie `rsb_vid`. |

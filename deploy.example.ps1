@@ -1,4 +1,6 @@
-# Déploiement de redsunsbio vers un hôte Linux via SSH — TEMPLATE.
+# Déploiement d'Antumbio vers un hôte Linux via SSH — TEMPLATE.
+# Les chemins et le nom de service ci-dessous restent en `redsunsbio` : c'est l'infra
+# déjà déployée, seul le nom du projet a changé.
 #
 # Copiez ce fichier vers `deploy.ps1` (ignoré par git) et renseignez vos valeurs :
 # hôte SSH, chemin distant, nom du service systemd.

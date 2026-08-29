@@ -6,7 +6,11 @@
 		<meta name="robots" content="noindex" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Orbitron:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600&family=Tenor+Sans&display=swap" rel="stylesheet" />
+		<!-- Bricolage Grotesque / Gloock / Anybody / Syne Mono / Sixtyfour ne servent qu'aux presets `theme.titleFont`
+		     (cf. TitleFont dans src/lib/types.ts). Les déclarer ici ne coûte que quelques
+		     octets de CSS : le navigateur ne télécharge le woff2 que des familles
+		     réellement rendues, donc une page qui reste en Cormorant n'en charge aucune. -->
+		<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Gloock&family=Orbitron:wght@400;500;600;700&family=Sixtyfour&family=Space+Grotesk:wght@300;400;500;600&family=Syne+Mono&family=Tenor+Sans&display=swap" rel="stylesheet" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
