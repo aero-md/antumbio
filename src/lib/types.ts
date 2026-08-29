@@ -82,5 +82,6 @@ export interface PageConfig {
 	customCss?: boolean;
 	customJs?: boolean;
 	showViewCounter?: boolean;
+	showProjectLink?: boolean; // true = lien vers le dépôt du projet sous les liens sociaux ; réservé à la page vitrine, une page perso n'a pas à le porter
 	showContact?: boolean; // false = pas d'onglet « contact » ; l'API de messages refuse aussi la page
 }

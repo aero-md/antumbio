@@ -26,6 +26,12 @@
 		return '';
 	}
 
+	// Dépôt du projet, affiché sous les liens sociaux quand `showProjectLink` est vrai.
+	// Il désigne le logiciel, pas la personne dont c'est la page : d'où le fait qu'il
+	// vive ici et pas dans `socials`, et qu'il soit opt-in page par page.
+	const PROJECT_URL = 'https://github.com/aero-md/antumbio';
+	const PROJECT_LABEL = PROJECT_URL.replace(/^https?:\/\//, '');
+
 	interface Props { data: PageData; }
 	let { data }: Props = $props();
 
@@ -449,6 +455,16 @@
 						{@html html}
 						{#if config.socials && config.socials.length > 0}
 							<SocialLinks socials={config.socials} />
+						{/if}
+						{#if config.showProjectLink}
+							<!-- Dernier élément du panneau « résumé » : se pose donc entre le
+							     séparateur de fin des liens sociaux et la barre d'onglets. -->
+							<div class="project-link-row">
+								<a class="project-link" href={PROJECT_URL} target="_blank" rel="noopener noreferrer">
+									<img src="/shared/github.png" alt="" aria-hidden="true" />
+									<span>{PROJECT_LABEL}</span>
+								</a>
+							</div>
 						{/if}
 					{:else if activeTab === 'details'}
 						<div class="details">{@html detailsHtml}</div>
@@ -1011,6 +1027,50 @@
 	}
 	:global(.card .social-link:hover .popover),
 	:global(.card .copy-btn.copied .popover) {
+		opacity: 1;
+	}
+	/* Lien vers le dépôt du projet. Même traitement que le corps des sections de
+	   l'onglet « détails » — fond sombre, aucun liseré : le fond suffit à le
+	   détacher du verre de la carte — mais en rayon plein, c'est une étiquette et
+	   pas un bloc de texte. Sans bordure, le survol ne peut plus jouer sur elle :
+	   le retour visuel passe par le fond et l'opacité. Pas de `:global`, ce
+	   balisage vient du composant et non d'un fragment `{@html}`. */
+	/* Marge négative assumée : `.panel` est un flex column à `gap: 1.7rem`, et cet
+	   écart s'ajoutait au `margin-bottom` du séparateur. Le lien se retrouvait à
+	   37px du trait pour 23px des onglets — collé au bas de la carte alors qu'il
+	   doit flotter entre les deux. On rabote la gap pour ce seul enfant. */
+	.project-link-row {
+		display: flex;
+		justify-content: center;
+		margin-top: -0.9rem;
+	}
+	.project-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		border-radius: 999px;
+		background: rgba(0, 0, 0, 0.45);
+		font-family: 'Space Grotesk', system-ui, sans-serif;
+		font-size: 0.85rem;
+		letter-spacing: 0.02em;
+		text-decoration: none;
+		color: rgba(255, 255, 255, 0.75);
+		transition: background 0.2s ease, color 0.2s ease;
+	}
+	.project-link:hover {
+		background: rgba(0, 0, 0, 0.62);
+		color: rgba(255, 255, 255, 0.98);
+	}
+	.project-link img {
+		width: 1rem;
+		height: 1rem;
+		object-fit: contain;
+		/* Le PNG source est noir, comme toutes les icônes de `static/shared/`. */
+		filter: brightness(0) invert(1);
+		opacity: 0.8;
+	}
+	.project-link:hover img {
 		opacity: 1;
 	}
 	:global(.card .copy-btn .copied-label) { display: none; }

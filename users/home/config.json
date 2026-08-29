@@ -9,7 +9,6 @@
 	"nicknameTint": false,
 	"landing": { "enabled": true, "text": "click to enter" },
 	"socials": [
-		{ "name": "github", "url": "https://github.com/" },
 		{ "name": "discord", "copy": "example" },
 		{ "name": "youtube", "url": "https://www.youtube.com/" },
 		{ "name": "twitch", "url": "https://www.twitch.tv/" },
@@ -18,5 +17,6 @@
 	],
 	"customCss": false,
 	"customJs": false,
-	"showViewCounter": true
+	"showViewCounter": true,
+	"showProjectLink": true
 }

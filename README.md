@@ -67,6 +67,8 @@ Un avatar statique (`config.avatar`) accepte `png` / `jpg` / `webp` / `gif` — 
 
 **`config.json`** ne gère que l'infrastructure (fond, audio, landing, theme, view counter, `displayName` pour le nom affiché — repris dans le `<title>` sauf si `tabTitle` le surcharge). Schéma dans `src/lib/types.ts` (interface `PageConfig`). Exemple complet : `users/home/config.json`.
 
+`showProjectLink: true` ajoute sous la rangée de liens sociaux, juste au-dessus de la barre d'onglets, un lien vers le dépôt du projet. Il désigne le logiciel et non la personne dont c'est la page : réservé à `users/home/`, une page perso n'a pas à le porter.
+
 Fonds disponibles (`background.type`) : `color`, `image`, `video`, et `horizon` — une scène animée intégrée (ciel dégradé, soleil rouge, braises, cf. `src/lib/components/HorizonBackground.svelte`), sans aucun asset à fournir.
 
 **`index.html`** est un fragment HTML libre injecté dans le `<main class="card">`. Le music player est auto-ajouté en bas du container si `config.music` est défini. Styles par défaut disponibles pour les conventions usuelles : `h1`, `p`, `.avatar`, `.links a` (cf. `src/routes/[pseudo]/+page.svelte`). Le user peut tout overrider via `style.css` (`customCss: true`).
