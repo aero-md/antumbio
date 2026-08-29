@@ -2,9 +2,6 @@
 
 > *Antumbra* : la zone d'où l'on voit une éclipse annulaire — un anneau de lumière
 > autour du disque sombre. Le nom du projet en est la contraction avec « bio ».
->
-> Il ne désigne que le projet : le dossier, le domaine, la base et l'unité systemd
-> restent sous `redsunsbio`. Ne pas « harmoniser » sans migrer l'infra derrière.
 
 Site avec une landing page custom par utilisateur, accessible via `/[pseudo]`. Chaque page partage une structure de base (avatar, bio, liens, musique de fond, fond image/vidéo) mais peut surcharger CSS/JS spécifiques. Compteur de vues uniques par page, dédupliqué par identité serveur (cookie `rsb_vid` + HMAC), fenêtre glissante de 2 heures.
 
