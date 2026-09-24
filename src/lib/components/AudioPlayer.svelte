@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { MusicConfig } from '$lib/types';
 	import { resolveAsset } from '$lib/path';
 
@@ -24,6 +25,8 @@
 	// svelte-ignore state_referenced_locally
 	let volume = $state(config.volume ?? 0.4);
 	let muted = $state(false);
+	// Volume à 0 = silence, même sans avoir cliqué sur mute : l'icône doit le refléter.
+	const isMuted = $derived(muted || volume === 0);
 
 	const src = $derived(resolveAsset(assetBase, config.src));
 	const thumb = $derived(config.thumbnail ? resolveAsset(assetBase, config.thumbnail) : null);
@@ -34,10 +37,36 @@
 		audio.muted = muted;
 	});
 
+	// Ramène `audio.volume` de sa valeur actuelle jusqu'à `target` en `duration` secondes.
+	// Ne touche pas au state `volume` (le slider) : seul le volume réel de l'élément fade.
+	function fadeVolumeIn(target: number, duration: number) {
+		if (!audio) return;
+		const start = performance.now();
+		const startVol = audio.volume;
+		function step(now: number) {
+			if (!audio) return;
+			const t = Math.min(1, (now - start) / (duration * 1000));
+			audio.volume = startVol + (target - startVol) * t;
+			if (t < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+
+	// Ne doit tourner qu'à l'entrée (audio prêt + entered), jamais en réaction à un
+	// changement de volume derrière : `volume` est donc lu via `untrack` pour ne
+	// pas devenir une dépendance de l'effet (sinon chaque geste sur le slider
+	// reseekait à `startAt` et relançait play()).
 	$effect(() => {
 		if (!audio || !entered) return;
 		if (config.autoplay !== false) {
-			audio.play().then(() => (playing = true)).catch(() => (playing = false));
+			if (config.startAt) audio.currentTime = config.startAt;
+			const fadeIn = config.fadeIn ?? 0;
+			const target = untrack(() => volume) * VOLUME_GAIN;
+			if (fadeIn > 0) audio.volume = 0;
+			audio.play().then(() => {
+				playing = true;
+				if (fadeIn > 0) fadeVolumeIn(target, fadeIn);
+			}).catch(() => (playing = false));
 		}
 	});
 
@@ -97,6 +126,18 @@
 	{/if}
 {/snippet}
 
+{#snippet soundIcon()}
+	{#if isMuted}
+		<svg class="ico-svg ico-svg-muted" viewBox="0 0 24 24" aria-hidden="true">
+			<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+		</svg>
+	{:else}
+		<svg class="ico-svg" viewBox="0 0 24 24" aria-hidden="true">
+			<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+		</svg>
+	{/if}
+{/snippet}
+
 <div class="player">
 	{#if thumb}
 		<div class="thumb-wrap">
@@ -112,22 +153,14 @@
 		</div>
 	{/if}
 	<div class="meta">
-		{#if config.title}
-			{#if config.link}
-				<a class="title" href={config.link} target="_blank" rel="noopener noreferrer">{config.title}</a>
-			{:else}
-				<span class="title">{config.title}</span>
-			{/if}
-		{/if}
 		<div class="controls">
-			<button
-				class="play-btn"
-				onclick={toggle}
-				type="button"
-				aria-label={playing ? 'Pause' : 'Play'}
-			>
-				{@render playPauseIcon()}
-			</button>
+			{#if config.title}
+				{#if config.link}
+					<a class="title" href={config.link} target="_blank" rel="noopener noreferrer">{config.title}</a>
+				{:else}
+					<span class="title">{config.title}</span>
+				{/if}
+			{/if}
 			<span class="time time-current">{fmt(currentTime)}</span>
 			<span class="time-sep" aria-hidden="true">/</span>
 			<span class="time time-total">{fmt(duration)}</span>
@@ -144,16 +177,17 @@
 			/>
 			<div class="vol">
 				<button
-					class="ico-btn"
+					class="sound-icon"
 					onclick={() => (muted = !muted)}
 					type="button"
-					aria-label={muted ? 'Unmute' : 'Mute'}
-					aria-pressed={muted}
+					aria-label={isMuted ? 'Unmute' : 'Mute'}
+					aria-pressed={isMuted}
 				>
-					<span class="ico" class:muted aria-hidden="true"></span>
+					{@render soundIcon()}
 				</button>
 				<input
 					type="range"
+					class="sound-slider"
 					min="0"
 					max="1"
 					step="0.01"
@@ -163,6 +197,14 @@
 			</div>
 		</div>
 	</div>
+	<button
+		class="play-btn-mobile"
+		onclick={toggle}
+		type="button"
+		aria-label={playing ? 'Pause' : 'Play'}
+	>
+		{@render playPauseIcon()}
+	</button>
 </div>
 
 <style>
@@ -175,7 +217,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		width: 100%;
-		padding: 0.55rem 1.4rem 0.55rem 0.55rem;
+		padding: 0.55rem;
 		background: rgba(0, 0, 0, 0.55);
 		backdrop-filter: blur(8px);
 		border-radius: 999px;
@@ -230,7 +272,13 @@
 		flex-direction: column;
 		gap: 0.3rem;
 	}
+	/* Le titre et la barre de contrôles partagent la même grille (2 lignes) : le
+	   titre occupe uniquement la colonne 'prog', donc se centre exactement sur la
+	   barre de progression plutôt que sur toute la largeur du player. */
 	.title {
+		grid-area: title;
+		min-width: 0;
+		text-align: center;
 		color: white;
 		text-decoration: none;
 		font-weight: 500;
@@ -240,120 +288,107 @@
 	}
 	a.title:hover { text-decoration: underline; }
 
-	/* Desktop : grid 1 ligne — [curr] [progress] [total] [vol]. play-btn et time-sep cachés. */
+	/* Desktop : grid 2 lignes — [.][titre][.][.] / [curr][progress][total][vol]. */
 	.controls {
 		display: grid;
 		grid-template-columns: auto 1fr auto auto;
-		grid-template-areas: 'curr prog total vol';
+		grid-template-rows: auto auto;
+		grid-template-areas:
+			'.    title .     .  '
+			'curr prog  total vol';
 		align-items: center;
-		gap: 0.45rem;
+		gap: 0.3rem 0.45rem;
+		/* Marge en plus du padding de .player, pour que le slider de volume respire
+		   avant la courbe du cap droit de la pillule. */
+		padding-right: 0.35rem;
 	}
 	.time-current { grid-area: curr; }
 	.progress { grid-area: prog; min-width: 0; accent-color: var(--accent, #ff2040); }
 	.time-total { grid-area: total; }
-	.vol { grid-area: vol; }
-	.play-btn { display: none; }
 	.time-sep { display: none; }
 	.time {
 		font-variant-numeric: tabular-nums;
 		opacity: 0.7;
 		font-size: 0.72rem;
 	}
-	.play-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		margin: 0;
-		cursor: pointer;
-		color: inherit;
-		align-items: center;
-		justify-content: center;
-	}
-	.play-btn .pp-svg {
-		width: 1.1rem;
-		height: 1.1rem;
-		opacity: 0.85;
-		transition: opacity 0.15s ease;
-	}
-	.play-btn:hover .pp-svg { opacity: 1; }
+
+	/* Icône + slider de volume, en petit, dans la barre de contrôles — toujours
+	   visibles, pas de popup au survol. */
 	.vol {
+		grid-area: vol;
 		display: flex;
 		align-items: center;
 		gap: 0.3rem;
 		flex-shrink: 0;
-		margin-left: 0.3rem; /* +gap 0.45rem du parent = 0.75rem, identique à .player gap */
+		/* +gap 0.45rem du parent = 0.75rem, identique au gap de .player, pour que
+		   l'icône respire un peu par rapport au temps total. */
+		margin-left: 0.3rem;
 	}
-	.vol .ico-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		margin: 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		color: inherit;
-	}
-	.vol .ico {
-		display: inline-block;
-		width: 1rem;
-		height: 1rem;
-		opacity: 0.75;
-		background-color: currentColor;
-		-webkit-mask: url('/shared/icons/volume.svg') no-repeat center / contain;
-		mask: url('/shared/icons/volume.svg') no-repeat center / contain;
-		transition: opacity 0.15s ease;
-	}
-	.vol .ico-btn:hover .ico { opacity: 1; }
-	.vol .ico.muted {
-		-webkit-mask: url('/shared/icons/volume-off.svg') no-repeat center / contain;
-		mask: url('/shared/icons/volume-off.svg') no-repeat center / contain;
-		opacity: 0.55;
-	}
-	.vol input[type='range'] {
+	.sound-slider {
 		width: 3.5rem;
 		accent-color: var(--accent, #ff2040);
 	}
+	.sound-icon {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		color: inherit;
+	}
+	/* SVG inline plutôt qu'un masque CSS sur un span : le masque (mask-size: contain
+	   + mask-position: center) recale son layer sur des dimensions arrondies au
+	   pixel et introduit un décalage vertical perceptible. Une vraie <svg>, comme
+	   pour .pp-svg, se centre exactement via le flex du bouton parent. */
+	.sound-icon .ico-svg {
+		width: 1rem;
+		height: 1rem;
+		fill: currentColor;
+		display: block;
+		opacity: 0.75;
+		transition: opacity 0.15s ease;
+	}
+	.sound-icon:hover .ico-svg { opacity: 1; }
+	.sound-icon .ico-svg-muted { opacity: 0.55; }
 
-	/* Mobile : 2 lignes — [play] [curr / total] [vol] sur la 1re,
-	   [progress pleine largeur] sur la 2e. L'overlay play/pause de la thumb
-	   est désactivé (moins utile au tap qu'un bouton dédié). */
+	/* Bouton play/pause mobile : même gabarit que la thumb (48px), symétrique à
+	   l'autre bout de la pillule. Cachée sur desktop (hover sur la thumb + barre
+	   suffisent), affichée en mobile où il n'y a pas de hover fiable. */
+	.play-btn-mobile {
+		display: none;
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		align-items: center;
+		justify-content: center;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 50%;
+		color: white;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	/* Mobile : timer scindé en deux, curr à gauche du titre et total à droite —
+	   même principe que le desktop, le titre reste centré sur la colonne du milieu,
+	   qui est aussi celle de la barre de progression juste en dessous. Pas de
+	   contrôle de volume (le volume matériel du téléphone fait le job) ; le
+	   play/pause passe de la barre à un gros bouton à droite. */
 	@media (max-width: 600px) {
-		/* Le layout 2 lignes rend le player plus haut → caps de la pillule plus
-		   larges. Sans ce padding, la barre de progression (pleine largeur, rangée
-		   du bas) déborderait de la courbe aux coins inférieurs. */
-		.player {
-			padding-inline: 1.1rem;
-		}
 		.controls {
-			grid-template-columns: auto auto auto auto 1fr minmax(0, auto);
-			grid-template-rows: auto auto;
+			grid-template-columns: auto 1fr auto;
 			grid-template-areas:
-				'play curr sep total .   vol'
-				'prog prog prog prog prog prog';
-			gap: 0.3rem 0.4rem;
-			/* Marge interne pour que track + thumb des range inputs ne touchent
-			   pas le bord du container (le rendu UA déborde de la box CSS). */
+				'curr title total'
+				'prog prog  prog ';
 			padding-inline: 0.25rem;
 		}
-		.play-btn {
-			display: inline-flex;
-			grid-area: play;
-		}
-		.time-sep {
-			display: inline;
-			grid-area: sep;
-			opacity: 0.5;
-			font-size: 0.72rem;
-		}
+		.vol { display: none; }
+		.play-btn-mobile { display: flex; }
+		/* Pas de hover fiable sur mobile : la fonction play/pause de la thumb est
+		   inutilisable, autant la retirer (le gros bouton à droite fait le job). */
 		.thumb-overlay { display: none; }
-		.vol {
-			min-width: 0;
-		}
-		.vol input[type='range'] {
-			width: 100%;
-			max-width: 5rem;
-			min-width: 0;
-		}
 	}
 </style>

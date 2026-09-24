@@ -18,7 +18,12 @@
 	   Évite le bug `display: contents` du wrapper SvelteKit qui causait, au premier
 	   paint sur mobile, un FOUC où le container apparaissait mal positionné. */
 	:global(#app) {
+		/* `100vh` mobile compte la hauteur max (barre d'adresse masquée), pas la
+		   hauteur réellement visible au chargement : le centrage flex se fait sur
+		   une boîte plus haute que l'écran, donc la carte paraît poussée vers le
+		   bas. `dvh` (dynamic viewport height) suit la vraie zone visible. */
 		min-height: 100vh;
+		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
 		justify-content: center;

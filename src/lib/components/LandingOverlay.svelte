@@ -55,18 +55,15 @@
 		align-items: center;
 		gap: 1.4rem;
 	}
-	/* Recentrage réservé au cas avec icône : le milieu visuel se trouve dans le gap
-	   entre le bas de l'icône et le séparateur supérieur du « click to enter ».
-	   Calcul : (text + 2·gap + 2·sep − icon) / 2 ≈ -3.7rem
-	   (icon 12.1rem, text 1.44rem·1.2lh, gap 1.4rem).
-	   Sans icône, le stack n'a que le texte → on le laisse centré (pas de transform). */
-	.stack.has-icon {
-		transform: translateY(-3.7rem);
-	}
+	/* L'icône épée occupe presque tout son cadre (peu de transparence), contrairement
+	   à l'ancien logo 86 : le centrage par bounding box du flex suffit, pas besoin de
+	   décaler le stack vers le poids visuel comme avant. */
 	.icon {
-		width: 12.1rem;
-		height: 12.1rem;
+		width: 8.07rem;
+		aspect-ratio: 245 / 700;
+		height: auto;
 		object-fit: contain;
+		margin-bottom: 1.6rem;
 		/* Glow multi-couches en CSS pur. drop-shadow suit l'alpha du SVG, donc
 		   le halo épouse la forme du logo plutôt qu'un rectangle. */
 		filter:

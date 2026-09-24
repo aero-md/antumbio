@@ -11,6 +11,7 @@
 	import { resolveAsset } from '$lib/path';
 	import { getVisitorId } from '$lib/fingerprint';
 	import { watchTabFavicon } from '$lib/favicon';
+	import { extractAccentColor } from '$lib/color';
 
 	// Le favicon passe au gris quand l'onglet part en arrière-plan — sans effet
 	// si la page sert le favicon de son utilisateur, qui n'est pas à nous.
@@ -47,62 +48,9 @@
 	);
 	const assetBase = $derived(`/u/${pseudo}`);
 
-	// Couleur dominante de la PP : downscale à 48×48, on binne les pixels par octets
-	// (5 bits par canal = 32k buckets), on jette ceux à faible saturation / quasi-noir /
-	// quasi-blanc (sinon le gris parasite gagne) et on retient le bucket le plus
-	// populaire. C'est ce qui donne une vraie dominante perceptuelle vs la moyenne RGB
-	// (qui mixe bleu + skintone → mauve/bordeau sur la plupart des PP).
+	// Couleur dominante de la PP (cf. $lib/color.ts pour l'extraction). Sert de bas
+	// de dégradé au pseudo (blanc → dominante).
 	let pseudoColor = $state<string | null>(null);
-
-	// La dominante sert de bas de dégradé au pseudo (blanc → dominante). Une PP
-	// nocturne — un couchant sombre, une photo de nuit — sort un rouge quasi noir
-	// (mesuré : rgb(43, 9, 21)) et le bas des lettres devient illisible sur le verre.
-	// On borne donc l'intensité au lieu de rejeter la couleur : la teinte du user est
-	// conservée, seules sa saturation et sa luminosité sont ramenées dans une fenêtre
-	// lisible. Passage par HSL parce que c'est là que « teinte » et « intensité » se
-	// séparent proprement.
-	const MIN_SAT = 0.5;
-	const MIN_LUM = 0.58;
-	const MAX_LUM = 0.76;
-
-	function readableTint(r: number, g: number, b: number): string {
-		const rn = r / 255;
-		const gn = g / 255;
-		const bn = b / 255;
-		const max = Math.max(rn, gn, bn);
-		const min = Math.min(rn, gn, bn);
-		const l = (max + min) / 2;
-		const d = max - min;
-
-		let h = 0;
-		if (d !== 0) {
-			if (max === rn) h = ((gn - bn) / d) % 6;
-			else if (max === gn) h = (bn - rn) / d + 2;
-			else h = (rn - gn) / d + 4;
-			h *= 60;
-			if (h < 0) h += 360;
-		}
-		const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-
-		const s2 = Math.max(MIN_SAT, Math.min(1, s));
-		const l2 = Math.max(MIN_LUM, Math.min(MAX_LUM, l));
-
-		// HSL → RGB (formule par chroma/segment de teinte).
-		const c = (1 - Math.abs(2 * l2 - 1)) * s2;
-		const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-		const m = l2 - c / 2;
-		const seg = Math.floor(h / 60) % 6;
-		const [r1, g1, b1] = [
-			[c, x, 0],
-			[x, c, 0],
-			[0, c, x],
-			[0, x, c],
-			[x, 0, c],
-			[c, 0, x]
-		][seg];
-		const to255 = (v: number) => Math.round((v + m) * 255);
-		return `rgb(${to255(r1)}, ${to255(g1)}, ${to255(b1)})`;
-	}
 
 	$effect(() => {
 		// `nicknameTint: false` : on n'extrait rien, `--pseudo-accent` reste absent et
@@ -113,65 +61,26 @@
 		}
 		const src = discordAvatarUrl ?? (config.avatar ? resolveAsset(assetBase, config.avatar) : null);
 		if (!src) return;
-
-		let cancelled = false;
-		const img = new Image();
-		img.crossOrigin = 'anonymous'; // requis pour pouvoir lire le canvas
-		img.onload = () => {
-			if (cancelled) return;
-			const W = 48;
-			const canvas = document.createElement('canvas');
-			canvas.width = W;
-			canvas.height = W;
-			const ctx = canvas.getContext('2d');
-			if (!ctx) return;
-			let data: Uint8ClampedArray;
-			try {
-				ctx.drawImage(img, 0, 0, W, W);
-				data = ctx.getImageData(0, 0, W, W).data;
-			} catch {
-				return; // canvas tainted → fallback blanc reste
-			}
-
-			const buckets = new Map<number, { r: number; g: number; b: number; count: number }>();
-			for (let i = 0; i < data.length; i += 4) {
-				const r = data[i];
-				const g = data[i + 1];
-				const b = data[i + 2];
-				const a = data[i + 3];
-				if (a < 200) continue;
-				const max = Math.max(r, g, b);
-				const min = Math.min(r, g, b);
-				if (max - min < 25) continue; // quasi-gris : parasites
-				if (max < 70) continue;       // trop sombre pour porter une teinte lisible
-				if (min > 230) continue;      // trop clair
-				const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-				const e = buckets.get(key);
-				if (e) {
-					e.r += r;
-					e.g += g;
-					e.b += b;
-					e.count++;
-				} else {
-					buckets.set(key, { r, g, b, count: 1 });
-				}
-			}
-
-			let best: { r: number; g: number; b: number; count: number } | null = null;
-			for (const e of buckets.values()) {
-				if (!best || e.count > best.count) best = e;
-			}
-			if (!best) return;
-			const r = Math.round(best.r / best.count);
-			const g = Math.round(best.g / best.count);
-			const b = Math.round(best.b / best.count);
-			pseudoColor = readableTint(r, g, b);
-		};
-		img.src = src;
-		return () => {
-			cancelled = true;
-		};
+		return extractAccentColor(src, (color) => (pseudoColor = color));
 	});
+
+	// Accent du thème (slider, outline...) : `theme.accent` explicite du JSON s'il
+	// est fourni, sinon dominante de la PP comme pour `pseudoColor` (extraction
+	// indépendante : `nicknameTint: false` désactive le halo du pseudo mais pas
+	// l'accent auto). Fallback ultime posé dans les composants via `var(--accent, …)`.
+	let autoAccent = $state<string | null>(null);
+
+	$effect(() => {
+		if (config.theme?.accent) {
+			autoAccent = null;
+			return;
+		}
+		const src = discordAvatarUrl ?? (config.avatar ? resolveAsset(assetBase, config.avatar) : null);
+		if (!src) return;
+		return extractAccentColor(src, (color) => (autoAccent = color));
+	});
+
+	const accentColor = $derived(config.theme?.accent ?? autoAccent ?? undefined);
 
 	// Init synchrone à partir de data : si pas de landing, on est entré d'emblée
 	// (évite le flash où la carte démarre opacity:0 avant que l'effet bascule).
@@ -268,12 +177,14 @@
 
 		if (config.titleAnimation !== 'blink-cursor') return;
 
-		// Curseur rétro : un underscore clignote à la fin du titre.
-		let visible = true;
+		// Points de chargement : se posent un par un (0.5s d'intervalle), tiennent
+		// 1s une fois les trois posés, puis disparaissent d'un coup et ça recommence.
+		const pattern = [0, 1, 2, 3, 3];
+		let i = 0;
 		const id = setInterval(() => {
-			animatedTitle = visible ? base + '_' : base;
-			visible = !visible;
-		}, 600);
+			i = (i + 1) % pattern.length;
+			animatedTitle = base + '.'.repeat(pattern[i]);
+		}, 300);
 
 		return () => clearInterval(id);
 	});
@@ -395,7 +306,7 @@
 <!-- `--accent` posé ici et pas via un <style> dans <svelte:head> : Svelte lit le
      contenu d'un <style> comme du texte brut, l'interpolation n'y était jamais
      évaluée (la variable valait littéralement « {config.theme.accent} »). -->
-<div class="card-stack" style:--accent={config.theme?.accent}>
+<div class="card-stack" style:--accent={accentColor}>
 	<main
 		bind:this={cardEl}
 		class="card"

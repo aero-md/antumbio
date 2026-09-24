@@ -16,6 +16,8 @@ export interface MusicConfig {
 	autoplay?: boolean;
 	volume?: number;
 	loop?: boolean;
+	startAt?: number;      // position de départ en secondes
+	fadeIn?: number;       // durée du fondu d'entrée en secondes, appliqué depuis startAt
 }
 
 export interface LandingConfig {
