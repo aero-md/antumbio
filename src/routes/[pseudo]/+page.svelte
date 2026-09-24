@@ -30,7 +30,7 @@
 	// Dépôt du projet, affiché sous les liens sociaux quand `showProjectLink` est vrai.
 	// Il désigne le logiciel, pas la personne dont c'est la page : d'où le fait qu'il
 	// vive ici et pas dans `socials`, et qu'il soit opt-in page par page.
-	const PROJECT_URL = 'https://github.com/aero-md/antumbio';
+	const PROJECT_URL = 'https://github.com/aero-md/antumbra';
 	const PROJECT_LABEL = PROJECT_URL.replace(/^https?:\/\//, '');
 
 	interface Props { data: PageData; }

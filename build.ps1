@@ -1,4 +1,4 @@
-# Antumbio - Build & Run Script
+# Antumbra - Build & Run Script
 # SvelteKit fullstack (adapter-node)
 
 param(
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-Write-Host "Antumbio Build Script" -ForegroundColor Cyan
+Write-Host "Antumbra Build Script" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Install deps si node_modules absent

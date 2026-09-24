@@ -1,4 +1,4 @@
-# Déploiement d'Antumbio vers un hôte Linux via SSH — TEMPLATE.
+# Déploiement d'Antumbra vers un hôte Linux via SSH — TEMPLATE.
 # Les chemins et le nom de service ci-dessous restent en `redsunsbio` : c'est l'infra
 # déjà déployée, seul le nom du projet a changé.
 #
